@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Corona Articles Visualization</title>
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            font-family: 'Cormorant Garamond', serif;
+            background: #101420;
+            overflow-x: visible;
+            overflow-x: hidden;
+        }
+
+        .scroll-container {
+            width: 100vw;
+            height: 100vh;
+            overflow-y: auto;
+            overflow-x: hidden;
+            position: relative;
+        }
+
+        .container {
+            width: 100vw;
+            height: auto;
+            overflow: visible;
+            margin-top: -100px;
+            min-height: 3000px;
+        }
+
+        .tooltip {
+            position: absolute;
+            padding: 10px;
+            background: rgba(0, 0, 0, 0.95); /* 深色 tooltip 背景 */
+            border: 1px solid #444;
+            border-radius: 6px;
+            pointer-events: none;
+            font-size: 12px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            max-width: 300px;
+            z-index: 1000;
+            color: #e8e8e8; /* 白色文字 */
+        }
+
+        .status-message {
+            font-size: 18px;
+            fill: #e8e8e8;
+            text-anchor: middle;
+        }
+
+        .axis text {
+            font-size: 11px;
+            font-family: 'Cormorant Garamond', serif;
+            font-weight: 100;
+            fill: #b0b0b0;
+        }
+
+        .axis path,
+        .axis line {
+            stroke: #555;
+            shape-rendering: crispEdges;
+        }
+
+        .axis-label {
+            font-size: 14px;
+            fill: #ffffff;
+            font-weight: bold;
+            font-family: 'Cormorant Garamond', serif;
+        }
+
+        .group-label {
+            fill: #ffffff;
+            font-family: 'Cormorant Garamond', serif;
+        }
+
+        .node {
+            cursor: pointer;
+            transition: all 0.2s ease;
+            filter: drop-shadow(0 0 6px rgba(255, 255, 255, 0.4));
+            stroke: none;
+        }
+
+        .node:hover {
+            filter: drop-shadow(0 0 12px rgba(255, 255, 255, 0.7));
+            stroke: none;
+        }
+
+        .type-label {
+            font-size: 12px;
+            fill: #b0b0b0;
+            text-anchor: middle;
+            font-weight: 400;
+            font-family: 'Cormorant Garamond', serif;
+        }
+
+        .legend {
+            font-size: 12px;
+            fill: #b0b0b0;
+            font-family: 'Cormorant Garamond', serif;
+        }
+
+        .connection-line {
+            stroke: #666666; 
+            stroke-width: 0.3; 
+            fill: none;
+            opacity: 0.08; 
+            transition: all 0.3s ease;
+        }
+
+        .connection-line.highlighted {
+            stroke: #999999; 
+            opacity: 0.4; 
+            stroke-width: 0.8;
+        }
+
+        .floating-panel {
+            position: fixed;
+            right: 80px;
+            background: rgba(16, 20, 32, 0.95);
+            border: 1px solid #444;
+            border-radius: 8px;
+            padding: 15px;
+            color: #ffffff;
+            font-family: 'Cormorant Garamond', serif;
+            width: 230px;  
+            z-index: 1000;
+            backdrop-filter: blur(10px);
+            display: none;
+            transition: top 0.1s ease-out; 
+            max-height: 80vh; 
+            overflow-y: auto;
+        }
+
+        #keyword-panel {
+            top: 100px; 
+            width: 250px;
+        }
+
+        #content-panel {
+            width: 250px; 
+        }
+
+        .keyword-clickable {
+            transition: all 0.2s ease !important;
+            white-space: nowrap !important;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1) !important;
+        }
+
+        .keyword-clickable:hover {
+            transform: scale(1.05) !important;
+            box-shadow: 0 3px 6px rgba(0,0,0,0.15) !important;
+        }
+
+        .keyword-clickable:active {
+            transform: scale(0.95) !important;
+        }
+
+
+
+    </style>
+</head>
+<body>
+    <div class="scroll-container">
+        <div class="container"></div>
+    </div>
+    
+    <!-- 添加悬浮面板 -->
+    <div id="keyword-panel" class="floating-panel">
+    </div>
+    
+    <div id="content-panel" class="floating-panel">
+    </div>
+
+    <script src="scripts.js"></script>
+</body>
+</html>
