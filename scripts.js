@@ -1,4 +1,3 @@
-// Global variables
 let svg, xScale, yScale, colorScale, allData, filteredData;
 let currentSelection = null;
 let currentKeywordSelection = null;
@@ -6,7 +5,6 @@ let legendExpanded = {};
 let longPressTimer = null;
 let isLongPressing = false;
 
-// Type1 grouping map
 const type1GroupMap = {
     // Culture
     'Arts': 'Culture',
@@ -65,7 +63,6 @@ const type1GroupMap = {
     'Religion': 'Society'
 };
 
-// Order groups with Culture in the middle
 const groupOrder = [
     'Media',
     'Government', 
@@ -74,11 +71,21 @@ const groupOrder = [
     'Society'
 ];
 
-// Touch screen dimensions (64cm x 44cm aspect ratio)
 const SCREEN_ASPECT_RATIO = 64 / 44;
 
-// Initialize visualization
 document.addEventListener('DOMContentLoaded', function () {
+    document.addEventListener('touchstart', function(e) {
+        if (!e.target.closest('.scroll-container')) {
+            e.preventDefault();
+        }
+    }, { passive: false });
+    
+    document.addEventListener('touchmove', function(e) {
+        if (!e.target.closest('.scroll-container')) {
+            e.preventDefault();
+        }
+    }, { passive: false });
+
     const container = d3.select('.container');
     
     // Set dimensions based on touch screen aspect ratio
@@ -123,8 +130,9 @@ document.addEventListener('DOMContentLoaded', function () {
         .attr('class', 'status-message')
         .text("Loading data...");
 
-    // Handle clicks on empty space
-    svg.on('click', function (event) {
+    svg.on('click touchend', function (event) {
+        event.preventDefault();
+        
         const isNode = event.target.classList.contains('node');
         const isLegend = event.target.closest('.legend');
         const isPanel = event.target.closest('.content-panel') || 
@@ -632,11 +640,12 @@ document.addEventListener('DOMContentLoaded', function () {
                 return 'none';
             })
             .on('click', handleClick)
-            .on('mousedown', handleMouseDown)
+            .on('touchstart', handleTouchStart)
+            .on('touchend', handleTouchEnd)
+            .on('mousedown', handleMouseDown)  
             .on('mouseup', handleMouseUp)
             .on('mouseleave', handleMouseUp);
 
-        // 添加防重叠算法
         applyCollisionAvoidance(nodes);
     }
 
@@ -644,7 +653,6 @@ document.addEventListener('DOMContentLoaded', function () {
         let maxScrollY = 0;
         let yAxisBottom = 0;
         
-        // 计算Y轴底部位置
         function calculateLimits() {
             if (yScale && yScale.customPositions) {
                 const lastPosition = yScale.customPositions[yScale.customPositions.length - 1];
@@ -653,7 +661,6 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         }
         
-        // 滚动监听器
         function handleScroll() {
             const scrollY = window.scrollY;
             const keywordPanel = document.getElementById('keyword-panel');
@@ -669,19 +676,15 @@ document.addEventListener('DOMContentLoaded', function () {
             const viewportHeight = window.innerHeight;
             const panelMaxTop = yAxisBottom - 100; // Y轴底部向上100px
             
-            // 处理keyword panel
             if (keywordPanel && keywordPanel.style.display === 'block') {
                 const keywordPanelHeight = keywordPanel.offsetHeight;
                 let keywordTop = 100 + scrollY; // 基础位置 + 滚动偏移
                 
-                // 限制不超过Y轴底部
                 keywordTop = Math.min(keywordTop, panelMaxTop - keywordPanelHeight);
-                // 限制不超出顶部
                 keywordTop = Math.max(keywordTop, scrollY + 20);
                 
                 keywordPanel.style.top = keywordTop + 'px';
                 
-                // 处理content panel - 跟随keyword panel
                 if (contentPanel && contentPanel.style.display === 'block') {
                     let contentTop = keywordTop + keywordPanelHeight + 10;
                     const contentPanelHeight = contentPanel.offsetHeight;
@@ -692,20 +695,16 @@ document.addEventListener('DOMContentLoaded', function () {
                     contentPanel.style.top = contentTop + 'px';
                 }
             } else if (contentPanel && contentPanel.style.display === 'block') {
-                // 只有content panel显示时
                 const contentPanelHeight = contentPanel.offsetHeight;
                 let contentTop = 100 + scrollY;
                 
-                // 限制不超过Y轴底部
                 contentTop = Math.min(contentTop, panelMaxTop - contentPanelHeight);
-                // 限制不超出顶部
                 contentTop = Math.max(contentTop, scrollY + 20);
                 
                 contentPanel.style.top = contentTop + 'px';
             }
         }
         
-        // 防抖动的滚动处理
         let scrollTimeout;
         function throttledScroll() {
             if (scrollTimeout) {
@@ -717,10 +716,8 @@ document.addEventListener('DOMContentLoaded', function () {
             }, 10);
         }
         
-        // 添加滚动监听器
         window.addEventListener('scroll', throttledScroll);
         
-        // 初始计算
         setTimeout(calculateLimits, 1500);
     }
 
@@ -855,7 +852,10 @@ document.addEventListener('DOMContentLoaded', function () {
                 .style('font-weight', 'bold')
                 .style('cursor', 'pointer')
                 .style('user-select', 'none')
-                .on('click', () => toggleLegendGroup(groupName));
+                .on('click touchend', (event) => {
+                    event.preventDefault();
+                    toggleLegendGroup(groupName);
+                });
 
             // 处理长文本换行
             const words = groupName.split(' ');
@@ -908,7 +908,10 @@ document.addEventListener('DOMContentLoaded', function () {
                     .style('cursor', 'pointer')
                     .style('user-select', 'none')
                     .text(type1)
-                    .on('click', () => highlightType1(type1));
+                    .on('click touchend', (event) => {
+                        event.preventDefault();
+                        highlightType1(type1);
+                    });
             });
 
             currentY += 30;
@@ -955,12 +958,39 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }
 
+    function handleTouchStart(event, d) {
+        event.preventDefault();
+        
+        isLongPressing = false;
+        longPressTimer = setTimeout(() => {
+            isLongPressing = true;
+            handleLongPress(event, d);
+        }, 600); 
+    }
+
+    function handleTouchEnd(event, d) {
+        event.preventDefault();
+        
+        if (longPressTimer) {
+            clearTimeout(longPressTimer);
+            longPressTimer = null;
+        }
+        
+        if (!isLongPressing) {
+            handleClick(event, d);
+        }
+        
+        setTimeout(() => {
+            isLongPressing = false;
+        }, 100);
+    }
+
     function handleMouseDown(event, d) {
         isLongPressing = false;
         longPressTimer = setTimeout(() => {
             isLongPressing = true;
             handleLongPress(event, d);
-        }, 800); // 800ms for long press
+        }, 800); 
     }
 
     function handleMouseUp(event, d) {
@@ -971,13 +1001,21 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function handleClick(event, d) {
-        // Prevent click if it was a long press
         if (isLongPressing) {
             isLongPressing = false;
             return;
         }
 
-        // Single click - show info preview
+        let clientX, clientY;
+        if (event.type === 'touchend') {
+            const touch = event.changedTouches[0];
+            clientX = touch.clientX;
+            clientY = touch.clientY;
+        } else {
+            clientX = event.clientX;
+            clientY = event.clientY;
+        }
+
         currentSelection = d;
         showNodePreview(d);
     }
@@ -987,22 +1025,18 @@ document.addEventListener('DOMContentLoaded', function () {
         isLongPressing = true;
         currentKeywordSelection = d;
         
-        // 清除之前的连接线
         svg.selectAll('.connection-line').remove();
         
-        // 重置所有节点样式
         svg.selectAll('.node')
             .attr('opacity', 0.1)
             .attr('r', d => d.radius)
             .style('filter', 'drop-shadow(0 0 2px rgba(255, 255, 255, 0.2))');
         
-        // 高亮被长按的节点
         d3.select(event.target)
             .attr('opacity', 1)
             .attr('r', d => d.radius)
             .style('filter', 'drop-shadow(0 0 12px rgba(255, 255, 255, 0.8))');
 
-        // 找到与当前节点有相同关键词的其他节点
         const relatedNodes = [];
         d.keywords.forEach(keyword => {
             const nodesWithKeyword = filteredData.filter(node => 
@@ -1016,7 +1050,6 @@ document.addEventListener('DOMContentLoaded', function () {
             });
         });
         
-        // 高亮相关节点
         relatedNodes.forEach(node => {
             svg.selectAll('.node')
                 .filter(nodeData => nodeData.id === node.id)
@@ -1025,10 +1058,8 @@ document.addEventListener('DOMContentLoaded', function () {
                 .style('filter', 'drop-shadow(0 0 12px rgba(255, 255, 255, 0.8))');
         });
         
-        // 只有当总的相关节点数 <= 50 时才绘制连接线
         const totalRelatedNodes = relatedNodes.length + 1; // +1 包括当前节点
         if (totalRelatedNodes <= 50) {
-            // 创建从当前节点到所有相关节点的连接线
             const connectionLinesGroup = svg.select('.connection-lines');
             
             relatedNodes.forEach(node => {
@@ -1051,13 +1082,10 @@ document.addEventListener('DOMContentLoaded', function () {
             console.log(`Skipped connection lines due to high count: ${totalRelatedNodes} > 50`);
         }
 
-        // 👇 修改：先显示关键词，再处理 article info
         showKeywordSelection(d.keywords);
         
-        // 👇 新增：如果当前有显示 article info，确保它显示正确的信息并重新定位
         const contentPanel = document.getElementById('content-panel');
         if (contentPanel && contentPanel.style.display === 'block') {
-            // 更新 article info 内容为当前长按的节点
             showNodePreview(d);
         }
     }
@@ -1159,113 +1187,117 @@ document.addEventListener('DOMContentLoaded', function () {
     // }
 
     function showKeywordSelection(keywords) {
-    const panel = document.getElementById('keyword-panel');
-    panel.style.display = 'block';
-    
-    if (keywords.length === 0) {
-        panel.innerHTML = '<h3>Keywords:</h3><p style="color: #666;">No keywords available</p>';
-        return;
-    }
-
-    const keywordWidth = 230;
-    const keywordHeight = 140;
-
-    let html = '<h3 style="margin-top: 0; color: #ffffff; font-size: 12px;">Keywords:</h3>';
-    html += `<div style="position: relative; width: ${keywordWidth}px; height: ${keywordHeight}px; margin: 10px 0;">`;
-
-    const centerX = (keywordWidth / 2) + 20;
-    const centerY = keywordHeight / 2;
-    
-    // 第1层：连接线SVG（最底层）
-    html += `<svg style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 1;">`;
-    
-    const numKeywords = keywords.length;
-    keywords.forEach((keyword, index) => {
-        let radiusX, radiusY, angle;
+        const panel = document.getElementById('keyword-panel');
+        panel.style.display = 'block';
         
-        if (numKeywords <= 6) {
-            radiusX = 80;
-            radiusY = 50;
-            angle = (index / numKeywords) * 2 * Math.PI - Math.PI / 2;
-        } else {
-            if (index < 6) {
-                radiusX = 60;
-                radiusY = 35;
-                angle = (index / 6) * 2 * Math.PI - Math.PI / 2;
-            } else {
-                const outerCount = numKeywords - 6;
-                const circleIndex = index - 6;
-                radiusX = 100;
-                radiusY = 60;
-                angle = (circleIndex / outerCount) * 2 * Math.PI - Math.PI / 2;
-            }
+        if (keywords.length === 0) {
+            panel.innerHTML = '<h3>Keywords:</h3><p style="color: #666;">No keywords available</p>';
+            return;
         }
-        
-        const keywordX = centerX + radiusX * Math.cos(angle);
-        const keywordY = centerY + radiusY * Math.sin(angle);
-        
-        // 在SVG中绘制连接线
-        html += `<line x1="${centerX}" y1="${centerY}" x2="${keywordX}" y2="${keywordY}" 
-                stroke="#ddd" stroke-width="1" opacity="0.6"/>`;
-    });
-    
-    html += `</svg>`;
-    
-    // 第2层：中心圆点（中间层）
-    html += `<div style="position: absolute; left: ${centerX-6}px; top: ${centerY-6}px; 
-            width: 12px; height: 12px; background: #FFD700; border-radius: 50%; 
-            border: 2px solid #FFF8DC; box-shadow: 0 0 8px rgba(255, 215, 0, 0.6); z-index: 2;"></div>`;
-    
-    // 第3层：关键词按钮（最上层）
-    keywords.forEach((keyword, index) => {
-        let radiusX, radiusY, angle;
-        
-        if (numKeywords <= 6) {
-            radiusX = 80;
-            radiusY = 50;
-            angle = (index / numKeywords) * 2 * Math.PI - Math.PI / 2;
-        } else {
-            if (index < 6) {
-                radiusX = 60;
-                radiusY = 35;
-                angle = (index / 6) * 2 * Math.PI - Math.PI / 2;
-            } else {
-                const outerCount = numKeywords - 6;
-                const circleIndex = index - 6;
-                radiusX = 100;
-                radiusY = 60;
-                angle = (circleIndex / outerCount) * 2 * Math.PI - Math.PI / 2;
-            }
-        }
-        
-        const keywordX = centerX + radiusX * Math.cos(angle);
-        const keywordY = centerY + radiusY * Math.sin(angle);
-        
-        const displayText = keyword;
-        const textLength = displayText.length * 6;
-        const rectWidth = Math.max(textLength + 12, 30);
-        
-        html += `<div style="position: absolute; left: ${keywordX - rectWidth/2}px; top: ${keywordY - 8}px; 
-                background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 6px; 
-                padding: 2px 6px; font-size: 10px; color: #333; text-align: center; 
-                cursor: pointer; user-select: none; z-index: 3;" 
-                data-keyword="${keyword}" class="keyword-clickable">
-                ${displayText}
-                </div>`;
-    });
-    
-    html += '</div>';
-    panel.innerHTML = html;
 
-    panel.querySelectorAll('.keyword-clickable').forEach(element => {
-        element.addEventListener('click', function() {
-            const keyword = this.getAttribute('data-keyword');
-            highlightKeyword(keyword);
+        const keywordWidth = 230;
+        const keywordHeight = 140;
+
+        let html = '<h3 style="margin-top: 0; color: #ffffff; font-size: 12px;">Keywords:</h3>';
+        html += `<div style="position: relative; width: ${keywordWidth}px; height: ${keywordHeight}px; margin: 10px 0;">`;
+
+        const centerX = (keywordWidth / 2) + 20;
+        const centerY = keywordHeight / 2;
+        
+        html += `<svg style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 1;">`;
+        
+        const numKeywords = keywords.length;
+        keywords.forEach((keyword, index) => {
+            let radiusX, radiusY, angle;
+            
+            if (numKeywords <= 6) {
+                radiusX = 80;
+                radiusY = 50;
+                angle = (index / numKeywords) * 2 * Math.PI - Math.PI / 2;
+            } else {
+                if (index < 6) {
+                    radiusX = 60;
+                    radiusY = 35;
+                    angle = (index / 6) * 2 * Math.PI - Math.PI / 2;
+                } else {
+                    const outerCount = numKeywords - 6;
+                    const circleIndex = index - 6;
+                    radiusX = 100;
+                    radiusY = 60;
+                    angle = (circleIndex / outerCount) * 2 * Math.PI - Math.PI / 2;
+                }
+            }
+            
+            const keywordX = centerX + radiusX * Math.cos(angle);
+            const keywordY = centerY + radiusY * Math.sin(angle);
+            
+            html += `<line x1="${centerX}" y1="${centerY}" x2="${keywordX}" y2="${keywordY}" 
+                    stroke="#ddd" stroke-width="1" opacity="0.6"/>`;
         });
-    });
+        
+        html += `</svg>`;
+        
+        html += `<div style="position: absolute; left: ${centerX-6}px; top: ${centerY-6}px; 
+                width: 12px; height: 12px; background: #FFD700; border-radius: 50%; 
+                border: 2px solid #FFF8DC; box-shadow: 0 0 8px rgba(255, 215, 0, 0.6); z-index: 2;"></div>`;
+        
+        keywords.forEach((keyword, index) => {
+            let radiusX, radiusY, angle;
+            
+            if (numKeywords <= 6) {
+                radiusX = 80;
+                radiusY = 50;
+                angle = (index / numKeywords) * 2 * Math.PI - Math.PI / 2;
+            } else {
+                if (index < 6) {
+                    radiusX = 60;
+                    radiusY = 35;
+                    angle = (index / 6) * 2 * Math.PI - Math.PI / 2;
+                } else {
+                    const outerCount = numKeywords - 6;
+                    const circleIndex = index - 6;
+                    radiusX = 100;
+                    radiusY = 60;
+                    angle = (circleIndex / outerCount) * 2 * Math.PI - Math.PI / 2;
+                }
+            }
+            
+            const keywordX = centerX + radiusX * Math.cos(angle);
+            const keywordY = centerY + radiusY * Math.sin(angle);
+            
+            const displayText = keyword;
+            const textLength = displayText.length * 6;
+            const rectWidth = Math.max(textLength + 12, 30);
+            
+            html += `<div style="position: absolute; left: ${keywordX - rectWidth/2}px; top: ${keywordY - 8}px; 
+                    background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 6px; 
+                    padding: 2px 6px; font-size: 10px; color: #333; text-align: center; 
+                    cursor: pointer; user-select: none; z-index: 3;" 
+                    data-keyword="${keyword}" class="keyword-clickable">
+                    ${displayText}
+                    </div>`;
+        });
+        
+        html += '</div>';
+        panel.innerHTML = html;
 
-    updateContentPanelPosition();
-}
+        panel.querySelectorAll('.keyword-clickable').forEach(element => {
+            panel.querySelectorAll('.keyword-clickable').forEach(element => {
+            element.addEventListener('click', function() {
+                const keyword = this.getAttribute('data-keyword');
+                highlightKeyword(keyword);
+            });
+            
+            element.addEventListener('touchend', function(e) {
+                e.preventDefault();
+                const keyword = this.getAttribute('data-keyword');
+                highlightKeyword(keyword);
+            });
+        });
+        });
+
+        updateContentPanelPosition();
+    }
 
     function repositionContentPanel() {
         const keywordPanel = document.getElementById('keyword-panel');
@@ -1577,7 +1609,6 @@ function setupFloatingPanelScrollBehavior() {
         }
     }
     
-    // 防抖动的滚动处理
     let scrollTimeout;
     function throttledScroll() {
         if (scrollTimeout) {
