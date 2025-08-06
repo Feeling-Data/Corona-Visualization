@@ -813,7 +813,7 @@ document.addEventListener('DOMContentLoaded', function () {
             .attr('x', 0)
             .attr('y', -25)
             .attr('class', 'axis-label')
-            .style('font-size', '12px')//标题
+            .style('font-size', '12px')
             .text('Categories');
 
         // Build type1 lists for each group
@@ -826,7 +826,6 @@ document.addEventListener('DOMContentLoaded', function () {
         const legendHeights = {};
         const groupBlocks = {};
 
-        // Build visual blocks for each group
         let currentY = 0;
         groupOrder.forEach(groupName => {
             const type1Items = type1GroupMapArray[groupName];
@@ -844,6 +843,25 @@ document.addEventListener('DOMContentLoaded', function () {
                 .attr('class', 'legend-group')
                 .attr('data-group', groupName);
 
+            const clickableArea = header.append('rect')
+                .attr('x', -5)           
+                .attr('y', -15)          
+                .attr('width', 120)      
+                .attr('height', 25)     
+                .attr('fill', 'transparent')  
+                .style('cursor', 'pointer')
+                .on('click touchend', (event) => {
+                    event.preventDefault();
+                    event.stopPropagation(); 
+                    toggleLegendGroup(groupName);
+                });
+
+            header.append('circle')
+                .attr('r', 7)
+                .attr('fill', colorScale(groupName))
+                .attr('opacity', 0.7)
+                .style('pointer-events', 'none'); 
+
             const groupText = header.append('text')
                 .attr('x', 15)
                 .attr('y', 0)
@@ -852,38 +870,19 @@ document.addEventListener('DOMContentLoaded', function () {
                 .style('font-weight', 'bold')
                 .style('cursor', 'pointer')
                 .style('user-select', 'none')
-                .on('click touchend', (event) => {
-                    event.preventDefault();
-                    toggleLegendGroup(groupName);
-                });
+                .style('pointer-events', 'none'); 
 
-            // 处理长文本换行
             const words = groupName.split(' ');
-            if (words.length > 1 && groupName.length > 12) {  // 如果超过12个字符且有空格
+            if (words.length > 1 && groupName.length > 12) {
                 words.forEach((word, i) => {
                     groupText.append('tspan')
                         .attr('x', 15)
-                        .attr('dy', i === 0 ? '0.35em' : '1.2em')  // 第一行正常，后续行下移
+                        .attr('dy', i === 0 ? '0.35em' : '1.2em')
                         .text(word);
                 });
             } else {
                 groupText.text(groupName);
             }
-            header.append('circle')
-                .attr('r', 7)
-                .attr('fill', colorScale(groupName))
-                .attr('opacity', 0.7);
-
-            header.append('text')
-                .attr('x', 15)
-                .attr('y', 0)
-                .attr('dy', '0.35em')
-                .style('font-size', '10px')
-                .style('font-weight', 'bold')
-                .style('cursor', 'pointer')
-                .style('user-select', 'none')
-                .text(groupName)
-                .on('click', () => toggleLegendGroup(groupName));
 
             const sub = block.append('g')
                 .attr('class', `legend-subitems-${sanitizedGroup}`)
@@ -895,23 +894,34 @@ document.addEventListener('DOMContentLoaded', function () {
                     .attr('class', 'legend-subitem')
                     .attr('transform', `translate(0, ${index * 22})`);
 
+                item.append('rect')
+                    .attr('x', -5)
+                    .attr('y', -10)
+                    .attr('width', 120)
+                    .attr('height', 20)
+                    .attr('fill', 'transparent')
+                    .style('cursor', 'pointer')
+                    .on('click touchend', (event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        highlightType1(type1);
+                    });
+
                 item.append('circle')
                     .attr('r', 4)
                     .attr('fill', colorScale(groupName))
-                    .attr('opacity', 0.5);
+                    .attr('opacity', 0.5)
+                    .style('pointer-events', 'none');
 
-                item.append('text')//子分类
+                item.append('text')
                     .attr('x', 12)
                     .attr('y', 0)
                     .attr('dy', '0.35em')
                     .style('font-size', '10px')
                     .style('cursor', 'pointer')
                     .style('user-select', 'none')
-                    .text(type1)
-                    .on('click touchend', (event) => {
-                        event.preventDefault();
-                        highlightType1(type1);
-                    });
+                    .style('pointer-events', 'none')
+                    .text(type1);
             });
 
             currentY += 30;
@@ -920,14 +930,12 @@ document.addEventListener('DOMContentLoaded', function () {
         function toggleLegendGroup(groupName) {
             const isExpanded = legendExpanded[groupName];
             
-            // 关闭所有其他的group
             Object.keys(legendExpanded).forEach(name => {
                 if (name !== groupName && legendExpanded[name]) {
                     const sanitizedName = name.replace(/\s+/g, '-').replace(/&/g, '');
                     const subItems = svg.select(`.legend-subitems-${sanitizedName}`);
                     subItems.style('display', 'none');
                     legendExpanded[name] = false;
-                    svg.select(`.legend-group[data-group="${name}"] .toggle-arrow`).text('▶');
                 }
             });
             
@@ -935,15 +943,12 @@ document.addEventListener('DOMContentLoaded', function () {
             const sub = svg.select(`.legend-subitems-${sanitizedGroup}`);
 
             legendExpanded[groupName] = !isExpanded;
-            svg.select(`.legend-group[data-group="${groupName}"] .toggle-arrow`)
-                .text(!isExpanded ? '▼' : '▶');
             sub.style('display', !isExpanded ? 'block' : 'none');
 
             legendHeights[groupName] = !isExpanded
                 ? 30 + type1GroupMapArray[groupName].length * 22 + 10
                 : 30;
 
-            // Re-layout all group-blocks
             let yOffset = 0;
             groupOrder.forEach(name => {
                 legendHeights[name] = legendExpanded[name] 
@@ -1609,6 +1614,7 @@ function setupFloatingPanelScrollBehavior() {
         }
     }
     
+    // 防抖动的滚动处理
     let scrollTimeout;
     function throttledScroll() {
         if (scrollTimeout) {
