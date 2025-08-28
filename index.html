@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, touch-action=manipulation">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Corona Articles Visualization</title>
     <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
@@ -11,30 +11,36 @@
             margin: 0;
             font-family: 'Cormorant Garamond', serif;
             background: #101420;
-            overflow-x: visible;
-            overflow-x: hidden;
+            overflow: hidden !important;
+            height: 100vh;
+            width: 100vw;
+            position: fixed;
         }
 
         .scroll-container {
             width: 100vw;
             height: 100vh;
-            overflow-y: auto;
-            overflow-x: hidden;
+            overflow: hidden !important;
             position: relative;
         }
 
         .container {
             width: 100vw;
-            height: auto;
-            overflow: visible;
-            margin-top: -100px;
-            min-height: 3000px;
+            height: 100vh;
+            overflow: hidden;
+            margin-top: 0px;
+        }
+
+        @media (orientation: portrait) {
+            .container {
+                margin-top: 0px; 
+            }
         }
 
         .tooltip {
             position: absolute;
             padding: 10px;
-            background: rgba(0, 0, 0, 0.95); /* 深色 tooltip 背景 */
+            background: rgba(0, 0, 0, 0.95);
             border: 1px solid #444;
             border-radius: 6px;
             pointer-events: none;
@@ -42,7 +48,7 @@
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
             max-width: 300px;
             z-index: 1000;
-            color: #e8e8e8; /* 白色文字 */
+            color: #e8e8e8;
         }
 
         .status-message {
@@ -118,29 +124,69 @@
 
         .floating-panel {
             position: fixed;
-            right: 80px;
             background: rgba(16, 20, 32, 0.95);
             border: 1px solid #444;
             border-radius: 8px;
             padding: 15px;
             color: #ffffff;
             font-family: 'Cormorant Garamond', serif;
-            width: 230px;  
             z-index: 1000;
             backdrop-filter: blur(10px);
             display: none;
-            transition: top 0.1s ease-out; 
-            max-height: 80vh; 
+            max-height: 55vh; 
             overflow-y: auto;
+            right: 80px;
+            width: 230px;
         }
 
         #keyword-panel {
             top: 100px; 
-            width: 250px;
+            width: 400px;
+            right: 10px;
+            overflow: visible;
         }
 
         #content-panel {
             width: 250px; 
+        }
+
+        @media (orientation: portrait) {
+            .floating-panel {
+                right: 10px;
+                width: 160px;
+                padding: 10px;
+                font-size: 11px;
+            }
+            
+            #keyword-panel {
+                width: 160px;
+            }
+            
+            #content-panel {
+                width: 160px;
+            }
+
+            .keyword-clickable {
+                font-size: 9px !important;
+                padding: 1px 4px !important;
+            }
+        }
+
+        @media (orientation: portrait) and (max-width: 600px) {
+            .floating-panel {
+                right: 5px;
+                width: 140px;
+                padding: 8px;
+                font-size: 10px;
+            }
+            
+            #keyword-panel {
+                width: 140px;
+            }
+            
+            #content-panel {
+                width: 140px;
+            }
         }
 
         .keyword-clickable {
@@ -157,9 +203,6 @@
         .keyword-clickable:active {
             transform: scale(0.95) !important;
         }
-
-
-
     </style>
 </head>
 <body>
@@ -167,13 +210,35 @@
         <div class="container"></div>
     </div>
     
-    <!-- 添加悬浮面板 -->
     <div id="keyword-panel" class="floating-panel">
     </div>
     
     <div id="content-panel" class="floating-panel">
     </div>
 
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            document.addEventListener('touchstart', function(e) {
+                e.preventDefault();
+            }, { passive: false });
+            
+            document.addEventListener('touchmove', function(e) {
+                e.preventDefault();
+            }, { passive: false });
+            
+            document.addEventListener('wheel', function(e) {
+                e.preventDefault();
+            }, { passive: false });
+            
+            document.addEventListener('keydown', function(e) {
+                if ([32, 33, 34, 35, 36, 37, 38, 39, 40].includes(e.keyCode)) {
+                    e.preventDefault();
+                }
+            });
+        });
+        
+        window.isPortraitMode = window.innerHeight > window.innerWidth;
+    </script>
     <script src="scripts.js"></script>
 </body>
 </html>
