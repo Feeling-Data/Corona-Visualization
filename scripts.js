@@ -1071,9 +1071,10 @@ document.addEventListener('DOMContentLoaded', function () {
         const articleData = currentSelection || currentKeywordSelection;
 
         // 🔗 竖向辐射设计 - 窄而高
-        panel.style.width = '280px';  // Increased width to accommodate article info
-        const keywordWidth = 320;
-        const keywordHeight = 300;
+        panel.style.width = '555px';  // Corrected width
+        panel.style.height = '791px';  // Set panel height
+        const keywordWidth = 555;
+        const keywordHeight = 500;  // Updated to 500px for better visualization
 
         // Article information section
         const dateStr = articleData && articleData.isGeneratedDate ? 'Unknown (Generated)' :
@@ -1082,27 +1083,28 @@ document.addEventListener('DOMContentLoaded', function () {
         let html = `
         <div style="margin-bottom: 15px; border-bottom: 1px solid #444; padding-bottom: 10px;">
             <div style="margin-bottom: 8px;">
-                <div style="color: #bbb; font-size: 10px; text-transform: uppercase; margin-bottom: 2px;">TITLE</div>
-                <div style="color: #ffffff; font-size: 14px; font-weight: bold; line-height: 1.3;">${articleData ? (articleData.title || 'N/A') : 'N/A'}</div>
+                <div style="color: #FFF; font-family: 'Neue Haas Grotesk Display Pro'; font-size: 18px; font-style: normal; font-weight: 500; line-height: normal; text-transform: uppercase; margin-bottom: 2px;">TITLE</div>
+                <div style="color: #FFF; font-family: 'Neue Haas Grotesk Display Pro'; font-size: 35px; font-style: normal; font-weight: 700; line-height: normal;">${articleData ? (articleData.title || 'N/A') : 'N/A'}</div>
             </div>
             <div style="display: flex; justify-content: space-between; margin-top: 8px;">
                 <div style="flex: 1;">
-                    <div style="color: #bbb; font-size: 10px; text-transform: uppercase; margin-bottom: 2px;">DATE</div>
-                    <div style="color: #ffffff; font-size: 12px; font-weight: bold; border-bottom: 1px solid #fff; display: inline-block; padding-bottom: 1px;">${dateStr}</div>
+                    <div style="color: #FFF; font-family: 'Neue Haas Grotesk Display Pro'; font-size: 18px; font-style: normal; font-weight: 500; line-height: normal; text-transform: uppercase; margin-bottom: 2px; border-bottom: 1px solid #fff; display: inline-block; padding-bottom: 1px;">DATE</div>
+                    <div style="color: #FFF; font-family: 'Neue Haas Grotesk Display Pro'; font-size: 25px; font-style: normal; font-weight: 600; line-height: normal;">${dateStr}</div>
                 </div>
                 <div style="flex: 1; margin-left: 15px;">
-                    <div style="color: #bbb; font-size: 10px; text-transform: uppercase; margin-bottom: 2px;">TYPE</div>
-                    <div style="color: #ffffff; font-size: 12px; font-weight: bold; border-bottom: 1px solid #fff; display: inline-block; padding-bottom: 1px;">${articleData ? (articleData.type1 || 'N/A') : 'N/A'}</div>
+                    <div style="color: #FFF; font-family: 'Neue Haas Grotesk Display Pro'; font-size: 18px; font-style: normal; font-weight: 500; line-height: normal; text-transform: uppercase; margin-bottom: 2px; border-bottom: 1px solid #fff; display: inline-block; padding-bottom: 1px;">TYPE</div>
+                    <div style="color: #FFF; font-family: 'Neue Haas Grotesk Display Pro'; font-size: 25px; font-style: normal; font-weight: 600; line-height: normal;">${articleData ? (articleData.type1 || 'N/A') : 'N/A'}</div>
                 </div>
             </div>
         </div>
         <div style="margin-bottom: 10px;">
-            <div style="color: #ffffff; font-size: 12px;">${keywords.length} KEYWORDS</div>
+            <div style="color: #FFF; font-family: 'Neue Haas Grotesk Display Pro'; font-size: 25px; font-style: normal; font-weight: 600; line-height: normal; display: inline;">${keywords.length}</div>
+            <div style="color: #FFF; font-family: 'Neue Haas Grotesk Display Pro'; font-size: 18px; font-style: normal; font-weight: 500; line-height: normal; display: inline; margin-left: 8px;">KEYWORDS</div>
         </div>
     `;
         html += `<div style="position: relative; width: ${keywordWidth}px; height: ${keywordHeight}px; margin: 10px 0;">`;
 
-        const centerX = keywordWidth / 2 - 40;
+        const centerX = keywordWidth / 2;
         const centerY = keywordHeight / 2;
 
         // 🔗 SVG连接线 - 从中心辐射到关键词
@@ -1115,8 +1117,8 @@ document.addEventListener('DOMContentLoaded', function () {
             if (numKeywords <= 8) {
                 // 单层椭圆分布，偏向竖直
                 angle = (index / numKeywords) * 2 * Math.PI - Math.PI / 2;
-                const radiusX = 60;  // 水平半径较小
-                const radiusY = 100; // 垂直半径较大
+                const radiusX = 120;  // 水平半径增加
+                const radiusY = 180; // 垂直半径增加
 
                 const keywordX = centerX + radiusX * Math.cos(angle);
                 const keywordY = centerY + radiusY * Math.sin(angle);
@@ -1128,8 +1130,8 @@ document.addEventListener('DOMContentLoaded', function () {
                 if (index < 6) {
                     // 内层
                     angle = (index / 6) * 2 * Math.PI - Math.PI / 2;
-                    const radiusX = 40;
-                    const radiusY = 70;
+                    const radiusX = 80;
+                    const radiusY = 120;
 
                     const keywordX = centerX + radiusX * Math.cos(angle);
                     const keywordY = centerY + radiusY * Math.sin(angle);
@@ -1141,8 +1143,8 @@ document.addEventListener('DOMContentLoaded', function () {
                     const outerCount = numKeywords - 6;
                     const circleIndex = index - 6;
                     angle = (circleIndex / outerCount) * 2 * Math.PI - Math.PI / 2;
-                    const radiusX = 70;
-                    const radiusY = 120;
+                    const radiusX = 140;
+                    const radiusY = 200;
 
                     const keywordX = centerX + radiusX * Math.cos(angle);
                     const keywordY = centerY + radiusY * Math.sin(angle);
@@ -1182,16 +1184,16 @@ document.addEventListener('DOMContentLoaded', function () {
 
             if (numKeywords <= 8) {
                 const angle = (index / numKeywords) * 2 * Math.PI - Math.PI / 2;
-                const radiusX = 60;
-                const radiusY = 100;
+                const radiusX = 120;
+                const radiusY = 180;
 
                 keywordX = centerX + radiusX * Math.cos(angle);
                 keywordY = centerY + radiusY * Math.sin(angle);
             } else {
                 if (index < 6) {
                     const angle = (index / 6) * 2 * Math.PI - Math.PI / 2;
-                    const radiusX = 40;
-                    const radiusY = 70;
+                    const radiusX = 80;
+                    const radiusY = 120;
 
                     keywordX = centerX + radiusX * Math.cos(angle);
                     keywordY = centerY + radiusY * Math.sin(angle);
@@ -1199,8 +1201,8 @@ document.addEventListener('DOMContentLoaded', function () {
                     const outerCount = numKeywords - 6;
                     const circleIndex = index - 6;
                     const angle = (circleIndex / outerCount) * 2 * Math.PI - Math.PI / 2;
-                    const radiusX = 70;
-                    const radiusY = 120;
+                    const radiusX = 140;
+                    const radiusY = 200;
 
                     keywordX = centerX + radiusX * Math.cos(angle);
                     keywordY = centerY + radiusY * Math.sin(angle);
@@ -1212,12 +1214,13 @@ document.addEventListener('DOMContentLoaded', function () {
             const rectWidth = Math.max(textLength + 10, 25);
 
             html += `<div style="position: absolute; left: ${keywordX - rectWidth / 2}px; top: ${keywordY - 8}px;
-                background: #f8f9fa; border: 1px solid #e9ecef; border-radius: 6px;
-                padding: 2px 6px; font-size: 9px; color: #333; text-align: center;
+                background: #000000; border: 1px solid #FFFFFF; border-radius: 15px;
+                padding: 4px 16px; color: #FFF; text-align: center;
+                font-family: 'Neue Haas Grotesk Display Pro'; font-size: 18px; font-style: normal; font-weight: 500; line-height: normal;
                 cursor: pointer; user-select: none; z-index: 3; transition: all 0.2s ease;"
                 data-keyword="${keyword}" class="keyword-clickable"
-                onmouseover="this.style.background='#e9ecef'; this.style.transform='scale(1.05)'"
-                onmouseout="this.style.background='#f8f9fa'; this.style.transform='scale(1)'"
+                onmouseover="if(!this.classList.contains('selected')) { this.style.background='#333333'; } this.style.transform='scale(1.05)'"
+                onmouseout="if(!this.classList.contains('selected')) { this.style.background='#000000'; } this.style.transform='scale(1)'"
                 title="${keyword}">
                 ${displayText}
                 </div>`;
@@ -1231,6 +1234,26 @@ document.addEventListener('DOMContentLoaded', function () {
             element.addEventListener('click', function () {
                 const keyword = this.getAttribute('data-keyword');
                 console.log('🔗 Keyword clicked:', keyword);
+
+                // Toggle selected state
+                const isSelected = this.classList.contains('selected');
+
+                // Remove selected class from all other keywords
+                panel.querySelectorAll('.keyword-clickable').forEach(el => {
+                    el.classList.remove('selected');
+                    el.style.background = '#000000';
+                    el.style.color = '#FFF';
+                    el.style.border = '1px solid #FFFFFF';
+                });
+
+                // Toggle current keyword
+                if (!isSelected) {
+                    this.classList.add('selected');
+                    this.style.background = '#FFFFFF';
+                    this.style.color = '#000000';
+                    this.style.border = '1px solid #000000';
+                }
+
                 highlightKeyword(keyword);
             });
 
