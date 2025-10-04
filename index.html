@@ -198,14 +198,27 @@
                 transform: scale(0.95) !important;
             }
 
-            .category-navigation {
+            .visualization-container {
                 position: fixed;
                 top: 40px;
                 left: 50%;
                 transform: translateX(-50%);
                 display: flex;
-                gap: 40px;
+                flex-direction: column;
+                align-items: center;
                 z-index: 1000;
+            }
+
+            .category-navigation {
+                display: flex;
+                gap: 40px;
+                margin-bottom: 20px;
+            }
+
+            .svg-container {
+                width: 100%;
+                display: flex;
+                justify-content: center;
             }
 
             .category-item {
@@ -298,9 +311,13 @@
             }
 
             @media (orientation: portrait) {
+                .visualization-container {
+                    top: 20px;
+                }
+
                 .category-navigation {
                     gap: 20px;
-                    top: 20px;
+                    margin-bottom: 15px;
                 }
 
                 .category-item {
@@ -319,23 +336,26 @@
             <div class="container"></div>
         </div>
 
-        <div id="category-nav" class="category-navigation">
-            <div class="category-item" data-category="Media">
-                <span class="category-text">Media</span>
-                <span class="category-caret">^</span>
+        <div id="visualization-container" class="visualization-container">
+            <div id="category-nav" class="category-navigation">
+                <div class="category-item" data-category="Media">
+                    <span class="category-text">Media</span>
+                    <span class="category-caret">^</span>
+                </div>
+                <div class="category-item" data-category="Entertainment">
+                    <span class="category-text">Entertainment</span>
+                    <span class="category-caret">^</span>
+                </div>
+                <div class="category-item" data-category="Knowledge">
+                    <span class="category-text">Knowledge</span>
+                    <span class="category-caret">^</span>
+                </div>
+                <div class="category-item" data-category="Government">
+                    <span class="category-text">Government</span>
+                    <span class="category-caret">^</span>
+                </div>
             </div>
-            <div class="category-item" data-category="Entertainment">
-                <span class="category-text">Entertainment</span>
-                <span class="category-caret">^</span>
-            </div>
-            <div class="category-item" data-category="Knowledge">
-                <span class="category-text">Knowledge</span>
-                <span class="category-caret">^</span>
-            </div>
-            <div class="category-item" data-category="Government">
-                <span class="category-text">Government</span>
-                <span class="category-caret">^</span>
-            </div>
+            <div id="svg-container" class="svg-container"></div>
         </div>
 
         <div id="keyword-panel" class="floating-panel">

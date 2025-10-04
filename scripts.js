@@ -90,7 +90,7 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     }, { passive: false });
 
-    const container = d3.select('.container');
+    const container = d3.select('.svg-container');
 
     const viewportWidth = window.innerWidth;
     const viewportHeight = window.innerHeight;
@@ -507,13 +507,15 @@ document.addEventListener('DOMContentLoaded', function () {
             yEnd: pos.yEnd - SELECTIVE_MOVE_UP + (pos.date >= new Date(2020, 3, 1) ? -80 : 100)
         }));
 
-        const availableWidth = width * 0.45;
-        const visualizationStart = isPortrait ? 150 : 80;
+        const availableWidth = width * 0.65;
+        // Center the visualization to align with dropdown navigation
+        const centerOffset = (width - availableWidth) / 2;
+        const visualizationStart = centerOffset;
 
         xScale = d3.scalePoint()
             .domain(groupOrder)
             .range([visualizationStart, visualizationStart + availableWidth])
-            .padding(0.1);
+            .padding(0.3);
 
         console.log('X Scale setup:', {
             domain: groupOrder,
