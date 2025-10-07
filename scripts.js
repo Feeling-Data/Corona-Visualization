@@ -2,6 +2,8 @@ let svg, xScale, yScale, colorScale, allData, filteredData;
 let currentSelection = null;
 let currentKeywordSelection = null;
 let legendExpanded = {};
+let nodeMap = new Map(); // OPTIMIZATION: Fast O(1) node lookup by ID
+let keywordIndex = new Map(); // OPTIMIZATION: Fast keyword-to-nodes lookup
 // activeGroupDropdown removed - no longer using SVG dropdowns
 
 // SVG dropdown functions removed - now using HTML dropdowns
@@ -190,7 +192,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 id: i + 1,
                 title: `Corona Article ${i + 1}`,
                 url: `https://example.com/article${i + 1}`,
-                'date of collection': randomDate.toISOString().split('T')[0],
+                'first_date_parsed': randomDate.toISOString().split('T')[0],
                 type1: randomType1,
                 type2: 'coronavirus',
                 is_alive: Math.random() > 0.3,
@@ -212,6 +214,27 @@ document.addEventListener('DOMContentLoaded', function () {
             return 'unknown';
         }
 
+        // Try yyyy-mm-dd format first (ISO 8601)
+        const isoDatePattern = /^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/;
+        const isoMatch = cleaned.match(isoDatePattern);
+
+        if (isoMatch) {
+            const year = parseInt(isoMatch[1], 10);
+            const month = parseInt(isoMatch[2], 10);
+            const day = parseInt(isoMatch[3], 10);
+
+            if (month >= 1 && month <= 12 && day >= 1 && day <= 31 && year >= 1900 && year <= 2030) {
+                const date = new Date(year, month - 1, day);
+
+                if (date.getFullYear() === year &&
+                    date.getMonth() === month - 1 &&
+                    date.getDate() === day) {
+                    return date;
+                }
+            }
+        }
+
+        // Fall back to UK date format (dd/mm/yyyy or dd-mm-yyyy)
         const ukDatePattern = /^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/;
         const match = cleaned.match(ukDatePattern);
 
@@ -241,6 +264,34 @@ document.addEventListener('DOMContentLoaded', function () {
         return new Date(randomTime);
     }
 
+    // OPTIMIZATION: Build fast lookup indices for O(1) access
+    function buildDataIndices() {
+        console.log('Building data indices for fast lookup...');
+        const startTime = performance.now();
+
+        // Clear existing indices
+        nodeMap.clear();
+        keywordIndex.clear();
+
+        // Build node lookup map (id -> node)
+        filteredData.forEach(node => {
+            nodeMap.set(node.id, node);
+
+            // Build keyword index (keyword -> array of nodes)
+            if (node.keywords && node.keywords.length > 0) {
+                node.keywords.forEach(keyword => {
+                    if (!keywordIndex.has(keyword)) {
+                        keywordIndex.set(keyword, []);
+                    }
+                    keywordIndex.get(keyword).push(node);
+                });
+            }
+        });
+
+        const endTime = performance.now();
+        console.log(`✅ Built indices for ${filteredData.length} nodes, ${keywordIndex.size} unique keywords in ${(endTime - startTime).toFixed(2)}ms`);
+    }
+
     function processData(rawData) {
         svg.select('.status-message').remove();
 
@@ -258,7 +309,7 @@ document.addEventListener('DOMContentLoaded', function () {
         let unknownCount = 0;
 
         filtered.forEach(d => {
-            const dateString = d['date of collection'];
+            const dateString = d['first_date_parsed'];
             const parsedDate = parseUKDate(dateString);
 
             if (parsedDate && parsedDate !== 'unknown') {
@@ -285,7 +336,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
         let generatedDateCount = 0;
         filtered.forEach((d, index) => {
-            const dateString = d['date of collection'];
+            const dateString = d['first_date_parsed'];
             const parsedDate = parseUKDate(dateString);
 
             if (parsedDate && parsedDate !== 'unknown') {
@@ -312,7 +363,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 d.id = +d.id;
             }
 
-            d.keywords = d.keywords ? d.keywords.toLowerCase().split(',').map(k => k.trim()).filter(k => k.length > 0) : [];
+            d.keywords = d["first_keywords_auto"] ? d["first_keywords_auto"].toLowerCase().split(',').map(k => k.trim()).filter(k => k.length > 0) : [];
 
             if (d.type1 === 'Scottish Government and Parliament') {
                 d.type1 = 'Parliament';
@@ -330,6 +381,9 @@ document.addEventListener('DOMContentLoaded', function () {
         filteredData = filtered;
         console.log('Filtered data:', filteredData);
         allData = filteredData;
+
+        // OPTIMIZATION: Build fast lookup indices for large datasets
+        buildDataIndices();
 
         if (filteredData.length === 0) {
             svg.append('text')
@@ -501,6 +555,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function highlightType1(selectedType1) {
         console.log('highlightType1 called with:', selectedType1);
+        const startTime = performance.now();
 
         if (!svg || !filteredData) {
             console.error('SVG or filteredData not available');
@@ -532,23 +587,26 @@ document.addEventListener('DOMContentLoaded', function () {
             return;
         }
 
-        nodesWithType1.forEach(node => {
-            svg.selectAll('.node')
-                .filter(d => d.id === node.id)
-                .attr('opacity', 1)
-                .attr('r', d => d.radius * 1.2)
-                .style('filter', 'drop-shadow(0 0 12px rgba(255, 255, 255, 0.8))');
-        });
-
+        // OPTIMIZATION: Use a Set for O(1) lookup instead of multiple filter operations
+        const highlightedNodeIds = new Set(nodesWithType1.map(n => n.id));
         if (currentKeywordSelection) {
-            svg.selectAll('.node')
-                .filter(d => d.id === currentKeywordSelection.id)
-                .attr('opacity', 1)
-                .attr('r', d => d.radius)
-                .style('filter', 'drop-shadow(0 0 12px rgba(255, 255, 255, 0.8))');
+            highlightedNodeIds.add(currentKeywordSelection.id);
         }
 
-        console.log(`Highlighted ${nodesWithType1.length} nodes for type1: ${selectedType1}`);
+        // OPTIMIZATION: Single pass through nodes instead of forEach with nested selectAll
+        svg.selectAll('.node')
+            .each(function (d) {
+                if (highlightedNodeIds.has(d.id)) {
+                    const isMainSelection = nodesWithType1.some(n => n.id === d.id);
+                    d3.select(this)
+                        .attr('opacity', 1)
+                        .attr('r', isMainSelection ? d.radius * 1.2 : d.radius)
+                        .style('filter', 'drop-shadow(0 0 12px rgba(255, 255, 255, 0.8))');
+                }
+            });
+
+        const endTime = performance.now();
+        console.log(`✅ Highlighted ${nodesWithType1.length} nodes for type1: ${selectedType1} in ${(endTime - startTime).toFixed(2)}ms`);
     }
 
     // Make highlightType1 globally accessible for debugging
@@ -646,18 +704,26 @@ document.addEventListener('DOMContentLoaded', function () {
     // Floating panel scroll behavior removed - panels will use fixed positioning
 
     function applyCollisionAvoidance(nodes) {
-        // Get the available height for the visualization
-        const availableHeight = height - margin.top - margin.bottom;
+        // OPTIMIZATION: Adaptive simulation iterations based on dataset size
+        const startTime = performance.now();
+        const dataSize = filteredData.length;
+
+        // Fewer iterations for larger datasets to maintain performance
+        const iterations = dataSize > 2000 ? 100 : dataSize > 1000 ? 150 : 200;
+
+        console.log(`Running force simulation with ${iterations} iterations for ${dataSize} nodes...`);
 
         // Simple force simulation with stronger collision avoidance for larger dots
         const simulation = d3.forceSimulation(filteredData)
             .force('collision', d3.forceCollide().radius(d => d.radius + 6).strength(1.4))
             .force('x', d3.forceX(d => xScale(d.group)).strength(0.8))
             .force('y', d3.forceY(d => d.displayY).strength(0.1))
+            .alphaDecay(0.05) // OPTIMIZATION: Faster convergence
+            .velocityDecay(0.3) // OPTIMIZATION: More friction for faster settling
             .stop();
 
-        // Run simulation until it settles - more iterations for better separation
-        for (let i = 0; i < 200; ++i) {
+        // Run simulation until it settles
+        for (let i = 0; i < iterations; ++i) {
             simulation.tick();
         }
 
@@ -670,45 +736,18 @@ document.addEventListener('DOMContentLoaded', function () {
             d.displayX = d.x;
             d.displayY = d.y;
         });
+
+        const endTime = performance.now();
+        console.log(`✅ Force simulation complete in ${(endTime - startTime).toFixed(2)}ms`);
     }
 
     function createConnectionLines() {
+        // OPTIMIZATION: Don't pre-compute connection lines for large datasets
+        // Connection lines will be drawn on-demand when a keyword is selected
         const connectionLinesGroup = svg.append('g')
             .attr('class', 'connection-lines');
 
-        const keywordConnections = {};
-
-        const allKeywords = new Set();
-        filteredData.forEach(d => {
-            d.keywords.forEach(keyword => allKeywords.add(keyword));
-        });
-
-        allKeywords.forEach(keyword => {
-            const nodesWithKeyword = filteredData.filter(d => d.keywords.includes(keyword));
-
-            for (let i = 0; i < nodesWithKeyword.length; i++) {
-                for (let j = i + 1; j < nodesWithKeyword.length; j++) {
-                    const node1 = nodesWithKeyword[i];
-                    const node2 = nodesWithKeyword[j];
-
-                    const midX = (node1.displayX + node2.displayX) / 2;
-                    const midY = (node1.displayY + node2.displayY) / 2;
-                    const distance = Math.sqrt(Math.pow(node2.displayX - node1.displayX, 2) + Math.pow(node2.displayY - node1.displayY, 2));
-
-                    const offsetX = -(node2.displayY - node1.displayY) * 0.1;
-                    const offsetY = (node2.displayX - node1.displayX) * 0.1;
-
-                    const path = `M ${node1.x || node1.displayX} ${node1.y || node1.displayY} Q ${midX + offsetX} ${midY + offsetY} ${node2.x || node2.displayX} ${node2.y || node2.displayY}`;
-
-                    connectionLinesGroup.append('path')
-                        .attr('d', path)
-                        .attr('class', 'connection-line')
-                        .attr('data-keyword', keyword)
-                        .attr('data-nodes', `${node1.id}-${node2.id}`)
-                        .style('display', 'block');
-                }
-            }
-        });
+        console.log('Connection lines group created - lines will be drawn on-demand for performance');
     }
 
     function setupDynamicSizesWithSqrt() {
@@ -811,27 +850,29 @@ document.addEventListener('DOMContentLoaded', function () {
             .attr('r', d => d.radius)
             .style('filter', 'drop-shadow(0 0 12px rgba(255, 255, 255, 0.8))');
 
-        // Handle related nodes highlighting
-        const relatedNodes = [];
+        // OPTIMIZATION: Handle related nodes highlighting using keywordIndex
+        const relatedNodeIds = new Set();
         d.keywords.forEach(keyword => {
-            const nodesWithKeyword = filteredData.filter(node =>
-                node.id !== d.id && node.keywords.includes(keyword)
-            );
-
+            const nodesWithKeyword = keywordIndex.get(keyword) || [];
             nodesWithKeyword.forEach(node => {
-                if (!relatedNodes.find(n => n.id === node.id)) {
-                    relatedNodes.push(node);
+                if (node.id !== d.id) {
+                    relatedNodeIds.add(node.id);
                 }
             });
         });
 
-        relatedNodes.forEach(node => {
+        // OPTIMIZATION: Single pass through nodes instead of forEach with nested selectAll
+        if (relatedNodeIds.size > 0) {
             svg.selectAll('.node')
-                .filter(nodeData => nodeData.id === node.id)
-                .attr('opacity', 1)
-                .attr('r', d => d.radius)
-                .style('filter', 'drop-shadow(0 0 12px rgba(255, 255, 255, 0.8))');
-        });
+                .each(function (nodeData) {
+                    if (relatedNodeIds.has(nodeData.id)) {
+                        d3.select(this)
+                            .attr('opacity', 1)
+                            .attr('r', nodeData.radius)
+                            .style('filter', 'drop-shadow(0 0 12px rgba(255, 255, 255, 0.8))');
+                    }
+                });
+        }
 
         showKeywordSelection(d.keywords);
     }
@@ -1069,6 +1110,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function highlightKeyword(selectedKeyword) {
         console.log('Highlighting keyword:', selectedKeyword);
+        const startTime = performance.now();
 
         if (!svg || !filteredData) {
             console.error('SVG or filteredData not available');
@@ -1077,15 +1119,15 @@ document.addEventListener('DOMContentLoaded', function () {
 
         svg.selectAll('.connection-line').remove();
 
-        // 让所有节点变暗
+        // Dim all nodes
         svg.selectAll('.node')
             .attr('opacity', 0.1)
             .attr('r', d => d.radius)
             .style('filter', 'drop-shadow(0 0 2px rgba(255, 255, 255, 0.2))');
 
-        const nodesWithKeyword = filteredData.filter(d =>
-            d.keywords && d.keywords.includes(selectedKeyword.trim())
-        );
+        // OPTIMIZATION: Use keywordIndex for O(1) lookup instead of filtering
+        const trimmedKeyword = selectedKeyword.trim();
+        const nodesWithKeyword = keywordIndex.get(trimmedKeyword) || [];
 
         console.log(`Found ${nodesWithKeyword.length} nodes with keyword: ${selectedKeyword}`);
 
@@ -1094,18 +1136,32 @@ document.addEventListener('DOMContentLoaded', function () {
             return;
         }
 
+        // OPTIMIZATION: Limit connection lines for very popular keywords
+        const MAX_CONNECTIONS = 500; // Limit total connections to maintain performance
         const keywordThreshold = 50;
         const isHighFrequency = nodesWithKeyword.length > keywordThreshold;
         const lineOpacity = isHighFrequency ? 0.2 : 0.4;
         const lineColor = isHighFrequency ? '#666666' : '#999999';
         const lineWidth = isHighFrequency ? 0.5 : 0.8;
 
-        console.log(`关键词"${selectedKeyword}"出现${nodesWithKeyword.length}次，${isHighFrequency ? '降低饱和度' : '正常饱和度'}`);
+        // Calculate how many connections we'd create
+        const totalPossibleConnections = (nodesWithKeyword.length * (nodesWithKeyword.length - 1)) / 2;
+        const shouldLimitConnections = totalPossibleConnections > MAX_CONNECTIONS;
+
+        console.log(`Keyword "${selectedKeyword}": ${nodesWithKeyword.length} nodes, ${totalPossibleConnections} possible connections ${shouldLimitConnections ? '(limiting to ' + MAX_CONNECTIONS + ')' : ''}`);
 
         const connectionLinesGroup = svg.select('.connection-lines');
+        let connectionsDrawn = 0;
+        const samplingRate = shouldLimitConnections ? MAX_CONNECTIONS / totalPossibleConnections : 1;
 
+        // Draw connection lines (with optional limiting for performance)
         for (let i = 0; i < nodesWithKeyword.length; i++) {
             for (let j = i + 1; j < nodesWithKeyword.length; j++) {
+                // OPTIMIZATION: Sample connections for very popular keywords
+                if (shouldLimitConnections && Math.random() > samplingRate) {
+                    continue;
+                }
+
                 const node1 = nodesWithKeyword[i];
                 const node2 = nodesWithKeyword[j];
 
@@ -1122,41 +1178,44 @@ document.addEventListener('DOMContentLoaded', function () {
                     .style('stroke', lineColor)
                     .style('opacity', lineOpacity)
                     .style('stroke-width', lineWidth);
+
+                connectionsDrawn++;
+                if (shouldLimitConnections && connectionsDrawn >= MAX_CONNECTIONS) {
+                    break;
+                }
+            }
+            if (shouldLimitConnections && connectionsDrawn >= MAX_CONNECTIONS) {
+                break;
             }
         }
 
-        const allNodes = svg.selectAll('.node');
+        // OPTIMIZATION: Use a Set for O(1) lookup when filtering nodes
+        const highlightedNodeIds = new Set(nodesWithKeyword.map(n => n.id));
+        if (currentKeywordSelection) {
+            highlightedNodeIds.add(currentKeywordSelection.id);
+        }
+
+        // OPTIMIZATION: Single selectAll with filter instead of multiple operations
+        svg.selectAll('.node')
+            .each(function (d) {
+                if (highlightedNodeIds.has(d.id)) {
+                    d3.select(this)
+                        .attr('opacity', 1)
+                        .attr('r', d.radius)
+                        .style('filter', 'drop-shadow(0 0 12px rgba(255, 255, 255, 0.8))')
+                        .raise();
+                }
+            });
+
+        // Raise connection lines and indicators AFTER nodes so they appear on top
         const connectionLines = svg.selectAll('.connection-line');
         const longPressIndicator = svg.selectAll('.long-press-indicator');
 
         connectionLines.raise();
-
-        svg.selectAll('.node')
-            .filter(function (d) {
-                return nodesWithKeyword.some(node => node.id === d.id) ||
-                    (currentKeywordSelection && d.id === currentKeywordSelection.id);
-            })
-            .raise();
-
         longPressIndicator.raise();
 
-        nodesWithKeyword.forEach(node => {
-            svg.selectAll('.node')
-                .filter(d => d.id === node.id)
-                .attr('opacity', 1)
-                .attr('r', d => d.radius)
-                .style('filter', 'drop-shadow(0 0 12px rgba(255, 255, 255, 0.8))');
-        });
-
-        if (currentKeywordSelection) {
-            svg.selectAll('.node')
-                .filter(d => d.id === currentKeywordSelection.id)
-                .attr('opacity', 1)
-                .attr('r', d => d.radius)
-                .style('filter', 'drop-shadow(0 0 12px rgba(255, 255, 255, 0.8))');
-        }
-
-        console.log(`✅ 连接线图层顺序已优化: ${nodesWithKeyword.length} 个节点，${isHighFrequency ? '低饱和度' : '正常饱和度'}连接线`);
+        const endTime = performance.now();
+        console.log(`✅ Highlighted ${nodesWithKeyword.length} nodes with ${connectionsDrawn} connection lines in ${(endTime - startTime).toFixed(2)}ms`);
     }
 
 
