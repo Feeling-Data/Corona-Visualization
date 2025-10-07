@@ -71,24 +71,24 @@ const groupOrder = [
 const SCREEN_ASPECT_RATIO = 64 / 44;
 
 document.addEventListener('DOMContentLoaded', function () {
-    document.body.style.overflow = 'hidden';
-    document.documentElement.style.overflow = 'hidden';
+    // Allow normal scrolling behavior
 
     // HTML dropdowns will be initialized after data is loaded
 
+    // Touch event handling simplified - only prevent on visualization elements
     document.addEventListener('touchstart', function (e) {
-        if (!e.target.closest('.scroll-container') &&
-            !e.target.closest('svg') &&
-            !e.target.classList.contains('node')) {
-            e.preventDefault();
+        if (e.target.closest('svg') || e.target.classList.contains('node')) {
+            // Allow touch events on visualization elements
+            return;
         }
-    }, { passive: false });
+    }, { passive: true });
 
     document.addEventListener('touchmove', function (e) {
-        if (!e.target.closest('.scroll-container')) {
-            e.preventDefault();
+        if (e.target.closest('svg') || e.target.classList.contains('node')) {
+            // Allow touch events on visualization elements
+            return;
         }
-    }, { passive: false });
+    }, { passive: true });
 
     const container = d3.select('.svg-container');
 
@@ -100,44 +100,33 @@ document.addEventListener('DOMContentLoaded', function () {
 
     let width, height;
 
+    // With 100% width SVG, we calculate based on viewport dimensions
     if (isPortrait) {
-        width = Math.min(viewportWidth * 0.9, 800);
-        height = width * SCREEN_ASPECT_RATIO;
-
-        if (height < viewportHeight * 0.4) {
-            height = viewportHeight * 0.5;
-            width = height / SCREEN_ASPECT_RATIO;
-        }
+        // For portrait, use most of the available height and full width
+        width = viewportWidth; // Use full viewport width
+        height = viewportHeight * 0.9; // Use 90% of viewport height
     } else {
-        const viewportAspectRatio = viewportWidth / viewportHeight;
-
-        if (viewportAspectRatio > SCREEN_ASPECT_RATIO) {
-            height = viewportHeight;
-            width = height * SCREEN_ASPECT_RATIO;
-        } else {
-            width = viewportWidth;
-            height = width / SCREEN_ASPECT_RATIO;
-        }
+        // For landscape, use most of the available height and full width
+        height = viewportHeight * 0.9; // Use 90% of viewport height
+        width = viewportWidth; // Use full viewport width
     }
 
-    height = Math.max(height, viewportHeight * 2);
-
     const margin = {
-        top: isPortrait ? 40 : 60,
+        top: 0,
         right: isPortrait ? Math.max(width / 10, 40) : width / 6,
-        bottom: 120,
+        bottom: 0,
         left: isPortrait ? 10 : 20
     };
 
-    const actualWidth = width + (isPortrait ? 150 : 400);
-    const actualHeight = height + 500;
+    // With 100% width, we need to handle padding differently
+    const actualWidth = width; // Use the full calculated width
+    const actualHeight = height + 300; // Increased to accommodate more data
 
     svg = container.append('svg')
-        .attr('width', actualWidth)
+        .attr('width', '100%')
         .attr('height', actualHeight)
-        .attr('viewBox', isPortrait ?
-            `0 0 ${actualWidth} ${actualHeight}` :
-            `0 0 ${actualWidth} ${actualHeight}`)
+        .attr('viewBox', `0 0 ${actualWidth} ${actualHeight}`)
+        .attr('preserveAspectRatio', 'xMidYMid meet') // Maintain aspect ratio and center
         .style('background', '#000000')
         .style('margin', '0 auto')
         .style('display', 'block')
@@ -174,30 +163,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     loadData();
 
-    let maxScrollY = 0;
-
-    function setupScrollLimits() {
-        setTimeout(() => {
-            if (yScale && yScale.customPositions) {
-                const lastPosition = yScale.customPositions[yScale.customPositions.length - 1];
-                const yAxisBottom = lastPosition.y + lastPosition.height;
-
-                maxScrollY = Math.max(yAxisBottom - window.innerHeight + 200, 0);
-
-                console.log('Scroll limits set:', {
-                    yAxisBottom: yAxisBottom,
-                    maxScrollY: maxScrollY,
-                    windowHeight: window.innerHeight
-                });
-
-                const scrollContainer = document.querySelector('.scroll-container');
-                if (scrollContainer) {
-                    const newHeight = yAxisBottom + 500;
-                    scrollContainer.style.height = newHeight + 'px';
-                }
-            }
-        }, 1000);
-    }
+    // Scroll setup removed - no longer needed for responsive design
 
     function loadData() {
         d3.csv('data.csv').then(function (rawData) {
@@ -362,6 +328,7 @@ document.addEventListener('DOMContentLoaded', function () {
         console.log(`Total records with generated dates: ${generatedDateCount} out of ${filtered.length}`);
 
         filteredData = filtered;
+        console.log('Filtered data:', filteredData);
         allData = filteredData;
 
         if (filteredData.length === 0) {
@@ -396,126 +363,52 @@ document.addEventListener('DOMContentLoaded', function () {
             actualTimeExtent[1].toISOString().split('T')[0]
         );
 
-        const monthDensity = d3.rollup(filteredData, v => v.length, d => d3.timeMonth(d.parsedDate));
-
-        const customYPositions = [];
+        // Create a simple time scale that uses the full available height
         const startDate = actualTimeExtent[0];
         const endDate = actualTimeExtent[1];
-
-        let currentY = margin.top + 20;
-        const baseMonthHeight = 60;
+        const availableHeight = height - margin.top - margin.bottom;
 
         console.log('Y axis will cover:', startDate.toISOString().split('T')[0], 'to', endDate.toISOString().split('T')[0]);
+        console.log('Available height for beeswarm:', availableHeight);
 
-        const compressStart = new Date(2020, 4, 1);
-        const compressEnd = new Date(2021, 10, 30);
-
-        let currentDate = new Date(startDate);
-        while (currentDate <= endDate) {
-            const monthKey = d3.timeMonth(currentDate);
-            const density = monthDensity.get(monthKey) || 0;
-            const year = currentDate.getFullYear();
-            const month = currentDate.getMonth();
-
-            let monthHeight = baseMonthHeight;
-
-            if (density > 200) {
-                monthHeight = baseMonthHeight * 3;
-            } else if (density > 100) {
-                monthHeight = baseMonthHeight * 2;
-            } else if (density > 50) {
-                monthHeight = baseMonthHeight * 1.5;
-            }
-
-            if (year === 2020 && month === 2) {
-                monthHeight *= 3;
-            } else if (year === 2020 && month === 3) {
-                monthHeight *= 1.5;
-            }
-
-            if (currentDate >= compressStart) {
-                monthHeight *= (0.4);
-                console.log(`Compressing ${year}-${String(month + 1).padStart(2, '0')}: height reduced to ${monthHeight}`);
-            }
-
-            customYPositions.push({
-                date: new Date(currentDate),
-                yStart: currentY,
-                yEnd: currentY + monthHeight,
-                height: monthHeight,
-                density: density
-            });
-
-            console.log(`${year}-${String(month + 1).padStart(2, '0')}: start=${currentY}, end=${currentY + monthHeight}, height=${monthHeight}`);
-
-            currentY += monthHeight;
-            currentDate.setMonth(currentDate.getMonth() + 1);
-        }
-
-        console.log('Total Y axis height:', currentY);
-
+        // Simple time scale using full available height
         yScale = d3.scaleTime()
             .domain([startDate, endDate])
-            .range([margin.top + 20, currentY - baseMonthHeight]);
+            .range([margin.top + 20, margin.top + availableHeight]);
 
-        const firstDataDate = d3.min(filteredData, d => d.parsedDate);
-        const firstMonthInfo = customYPositions.find(pos =>
-            d3.timeMonth(pos.date).getTime() === d3.timeMonth(firstDataDate).getTime()
-        );
-
-        let SELECTIVE_MOVE_UP = 0;
-        if (firstMonthInfo) {
-            const targetPosition = margin.top - 90;
-            SELECTIVE_MOVE_UP = firstMonthInfo.yStart - targetPosition;
-        }
-
-        window.selectiveMoveUp = SELECTIVE_MOVE_UP;
-        window.dataTargetPosition = margin.top - 90;
-
-        let assignedCount = 0;
-        let fallbackCount = 0;
-
+        // Assign Y positions directly using the time scale
         filteredData.forEach(d => {
-            const monthKey = d3.timeMonth(d.parsedDate);
-            const monthInfo = customYPositions.find(pos =>
-                d3.timeMonth(pos.date).getTime() === monthKey.getTime()
-            );
-
-            if (monthInfo) {
-                const monthStart = monthKey;
-                const monthEnd = d3.timeMonth.offset(monthKey, 1);
-                const monthProgress = (d.parsedDate - monthStart) / (monthEnd - monthStart);
-
-                const baseY = monthInfo.yStart + monthInfo.height * 0.1 + monthProgress * monthInfo.height * 0.8;
-                const variation = (Math.random() - 0.5) * monthInfo.height * 0.15;
-
-                d.adjustedY = baseY + variation - SELECTIVE_MOVE_UP;
-                assignedCount++;
-            } else {
-                d.adjustedY = yScale(d.parsedDate) - SELECTIVE_MOVE_UP;
-                fallbackCount++;
-                console.warn('No month info found for', d.parsedDate.toISOString().split('T')[0]);
-            }
+            d.adjustedY = yScale(d.parsedDate);
         });
 
-        console.log('Y position assignment:', assignedCount, 'custom,', fallbackCount, 'fallback');
+        // Debug: Check the actual Y position distribution
+        const yPositions = filteredData.map(d => d.adjustedY);
+        const minY = Math.min(...yPositions);
+        const maxY = Math.max(...yPositions);
+        console.log('Y position range:', minY, 'to', maxY);
+        console.log('Expected Y range:', margin.top + 20, 'to', margin.top + availableHeight);
+        console.log('Data spans', ((maxY - minY) / availableHeight * 100).toFixed(1) + '% of available height');
 
-        yScale.customPositions = customYPositions.map(pos => ({
-            ...pos,
-            originalYStart: pos.yStart,
-            yStart: pos.yStart - SELECTIVE_MOVE_UP + (pos.date >= new Date(2020, 3, 1) ? -80 : 100),
-            yEnd: pos.yEnd - SELECTIVE_MOVE_UP + (pos.date >= new Date(2020, 3, 1) ? -80 : 100)
-        }));
+        // If data doesn't span enough height, stretch it
+        if ((maxY - minY) / availableHeight < 0.5) {
+            console.log('Data too compressed, stretching Y positions...');
+            const stretchFactor = availableHeight / (maxY - minY) * 0.8; // Use 80% of available height
+            const centerY = (minY + maxY) / 2;
+            filteredData.forEach(d => {
+                d.adjustedY = centerY + (d.adjustedY - centerY) * stretchFactor;
+            });
+            console.log('Y positions stretched by factor:', stretchFactor);
+        }
 
-        const availableWidth = width * 0.65;
-        // Center the visualization to align with dropdown navigation
+        // With 100% width, use most of the available width for the visualization
+        const availableWidth = width * 0.9; // Use 90% of the full width for better spacing
         const centerOffset = (width - availableWidth) / 2;
         const visualizationStart = centerOffset;
 
         xScale = d3.scalePoint()
             .domain(groupOrder)
             .range([visualizationStart, visualizationStart + availableWidth])
-            .padding(0.3);
+            .padding(0.4); // Increased padding for better cluster separation
 
         console.log('X Scale setup:', {
             domain: groupOrder,
@@ -539,38 +432,9 @@ document.addEventListener('DOMContentLoaded', function () {
         createAxes();
         createConnectionLines();
         createNodes();
-        setupScrollLimits();
-
-        const firstDataDate = d3.min(filteredData, d => d.parsedDate);
-        const firstMonthInfo = yScale.customPositions.find(pos =>
-            d3.timeMonth(pos.date).getTime() === d3.timeMonth(firstDataDate).getTime()
-        );
-
-        if (firstMonthInfo) {
-            const targetY = margin.top + 40;
-            const moveUpDistance = firstMonthInfo.yStart - targetY;
-
-            console.log(`Moving visualization up by ${moveUpDistance}px`);
-
-            const visualizationGroup = svg.append('g')
-                .attr('class', 'visualization-group')
-                .attr('transform', `translate(0, ${-moveUpDistance})`);
-
-            svg.selectAll('.node').each(function () {
-                visualizationGroup.node().appendChild(this);
-            });
-
-            svg.selectAll('.connection-lines').each(function () {
-                visualizationGroup.node().appendChild(this);
-            });
-
-            svg.selectAll('.node').attr('cy', d => d.displayY);
-        }
 
         console.log('Setting up click events...');
-
         setupGlobalClickHandler();
-
         console.log('Click events ready!');
     }
 
@@ -724,19 +588,11 @@ document.addEventListener('DOMContentLoaded', function () {
             const sortedData = groupData.sort((a, b) => a.parsedDate - b.parsedDate);
 
             sortedData.forEach((d, i) => {
-                const xOffset = (Math.random() - 0.5) * groupWidth;
-                d.displayX = Math.max(50, Math.min(width - 50, groupX + xOffset));
-
-                const EARLY_MOVE_UP = 60;
-                const LATE_MOVE_UP = 60;
-
-                if (d.parsedDate >= new Date(2020, 3, 1)) {
-                    d.displayY = d.adjustedY - 90 - LATE_MOVE_UP;
-                } else {
-                    d.displayY = d.adjustedY - EARLY_MOVE_UP;
-                }
-
-                d.displayY = Math.max(margin.top - 100, Math.min(height - margin.bottom + 100, d.displayY));
+                // Initialize positions for force simulation
+                d.displayX = groupX;
+                d.displayY = d.adjustedY;
+                d.x = groupX;
+                d.y = d.adjustedY;
             });
         });
 
@@ -787,104 +643,32 @@ document.addEventListener('DOMContentLoaded', function () {
         // SVG dropdowns removed - function kept for compatibility
     }
 
-    function setupFloatingPanelScrollBehavior() {
-        let maxScrollY = 0;
-        let yAxisBottom = 0;
-
-        function calculateLimits() {
-            if (yScale && yScale.customPositions) {
-                const lastPosition = yScale.customPositions[yScale.customPositions.length - 1];
-                yAxisBottom = lastPosition.y + lastPosition.height;
-                maxScrollY = Math.max(yAxisBottom - window.innerHeight + 200, 0);
-            }
-        }
-
-        function handleScroll() {
-            const scrollY = window.scrollY;
-            const keywordPanel = document.getElementById('keyword-panel');
-            const contentPanel = document.getElementById('content-panel');
-
-            if (scrollY > maxScrollY) {
-                window.scrollTo(0, maxScrollY);
-                return;
-            }
-
-            const viewportHeight = window.innerHeight;
-            const panelMaxTop = yAxisBottom - 100;
-
-            if (keywordPanel && keywordPanel.style.display === 'block') {
-                const keywordPanelHeight = keywordPanel.offsetHeight;
-                let keywordTop = 100 + scrollY;
-
-                keywordTop = Math.min(keywordTop, panelMaxTop - keywordPanelHeight);
-                keywordTop = Math.max(keywordTop, scrollY + 20);
-
-                keywordPanel.style.top = keywordTop + 'px';
-
-                if (contentPanel && contentPanel.style.display === 'block') {
-                    let contentTop = keywordTop + keywordPanelHeight + 10;
-                    const contentPanelHeight = contentPanel.offsetHeight;
-
-                    contentTop = Math.min(contentTop, panelMaxTop - contentPanelHeight);
-
-                    contentPanel.style.top = contentTop + 'px';
-                }
-            } else if (contentPanel && contentPanel.style.display === 'block') {
-                const contentPanelHeight = contentPanel.offsetHeight;
-                let contentTop = 100 + scrollY;
-
-                contentTop = Math.min(contentTop, panelMaxTop - contentPanelHeight);
-                contentTop = Math.max(contentTop, scrollY + 20);
-
-                contentPanel.style.top = contentTop + 'px';
-            }
-        }
-
-        let scrollTimeout;
-        function throttledScroll() {
-            if (scrollTimeout) {
-                clearTimeout(scrollTimeout);
-            }
-            scrollTimeout = setTimeout(() => {
-                calculateLimits();
-                handleScroll();
-            }, 10);
-        }
-
-        window.addEventListener('scroll', throttledScroll);
-
-        setTimeout(calculateLimits, 1500);
-    }
+    // Floating panel scroll behavior removed - panels will use fixed positioning
 
     function applyCollisionAvoidance(nodes) {
+        // Get the available height for the visualization
+        const availableHeight = height - margin.top - margin.bottom;
+
+        // Simple force simulation with stronger collision avoidance for larger dots
         const simulation = d3.forceSimulation(filteredData)
-            .force('collision', d3.forceCollide().radius(d => d.radius + 3).strength(0.8))
-            .force('x', d3.forceX(d => d.displayX).strength(0.3))
+            .force('collision', d3.forceCollide().radius(d => d.radius + 6).strength(1.4))
+            .force('x', d3.forceX(d => xScale(d.group)).strength(0.8))
             .force('y', d3.forceY(d => d.displayY).strength(0.1))
-            .alphaDecay(0.05)
-            .velocityDecay(0.4);
+            .stop();
 
-        simulation.on('tick', () => {
-            filteredData.forEach(d => {
-                const groupX = xScale(d.group);
-                const groupWidth = 120;
+        // Run simulation until it settles - more iterations for better separation
+        for (let i = 0; i < 200; ++i) {
+            simulation.tick();
+        }
 
-                d.x = Math.max(groupX - groupWidth / 2,
-                    Math.min(groupX + groupWidth / 2, d.x));
+        // Update node positions
+        nodes.attr('cx', d => d.x)
+            .attr('cy', d => d.y);
 
-                d.y = Math.max(margin.top + 20,
-                    Math.min(height - margin.bottom - 20, d.y));
-            });
-
-            nodes.attr('cx', d => d.x)
-                .attr('cy', d => d.y);
-        });
-
-        simulation.on('end', () => {
-            filteredData.forEach(d => {
-                d.displayX = d.x;
-                d.displayY = d.y;
-            });
+        // Update data with final positions
+        filteredData.forEach(d => {
+            d.displayX = d.x;
+            d.displayY = d.y;
         });
     }
 
@@ -932,7 +716,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
         const sizeScale = d3.scaleSqrt()
             .domain(keywordExtent)
-            .range([3, 5]);
+            .range([6, 12]); // Increased from [3, 5] to [6, 12] for much larger dots
 
         filteredData.forEach(d => {
             d.radius = sizeScale(d.keywords.length);
@@ -988,13 +772,14 @@ document.addEventListener('DOMContentLoaded', function () {
             .style('filter', 'drop-shadow(0 0 2px rgba(255, 255, 255, 0.2))');
 
         const targetElement = event.target;
-        const nodeX = parseFloat(targetElement.getAttribute('cx'));
-        const nodeY = parseFloat(targetElement.getAttribute('cy'));
-        const nodeRadius = parseFloat(targetElement.getAttribute('r'));
+        // Use the data's current position instead of DOM attributes for accuracy
+        const nodeX = d.displayX || parseFloat(targetElement.getAttribute('cx'));
+        const nodeY = d.displayY || parseFloat(targetElement.getAttribute('cy'));
+        const nodeRadius = d.radius || parseFloat(targetElement.getAttribute('r'));
 
         const offsetX = 0;
-        const offsetY = 30;
-        const circleRadius = nodeRadius + 6;
+        const offsetY = 0; // Center the indicator on the node
+        const circleRadius = nodeRadius + 8; // Slightly larger buffer for the larger dots
 
         const circleX = nodeX + offsetX;
         const circleY = nodeY + offsetY;
@@ -1063,6 +848,12 @@ document.addEventListener('DOMContentLoaded', function () {
         }
 
         panel.style.display = 'block';
+
+        // Add class to slide visualization to the left
+        const visualizationContainer = document.getElementById('visualization-container');
+        if (visualizationContainer) {
+            visualizationContainer.classList.add('panel-open');
+        }
 
         if (keywords.length === 0) {
             panel.innerHTML = '<h3>Keywords:</h3><p style="color: #666;">No keywords available</p>';
@@ -1450,58 +1241,17 @@ function resetVisualization() {
         console.log('✅ Keyword panel hidden');
     }
 
+    // Remove class to slide visualization back to center
+    const visualizationContainer = document.getElementById('visualization-container');
+    if (visualizationContainer) {
+        visualizationContainer.classList.remove('panel-open');
+    }
+
 
     console.log('✅ COMPLETE RESET FINISHED - 所有状态已恢复默认！');
 }
 
-function setupFloatingPanelScrollBehavior() {
-    let maxScrollY = 0;
-    let yAxisBottom = 0;
-
-    function calculateLimits() {
-        if (yScale && yScale.customPositions) {
-            const lastPosition = yScale.customPositions[yScale.customPositions.length - 1];
-            yAxisBottom = lastPosition.y + lastPosition.height;
-            maxScrollY = Math.max(yAxisBottom - window.innerHeight + 200, 0);
-        }
-    }
-
-    function handleScroll() {
-        const scrollY = window.scrollY;
-        const keywordPanel = document.getElementById('keyword-panel');
-
-        if (scrollY > maxScrollY) {
-            window.scrollTo(0, maxScrollY);
-            return;
-        }
-
-        const panelMaxTop = yAxisBottom - 100;
-
-        if (keywordPanel && keywordPanel.style.display === 'block') {
-            const keywordPanelHeight = keywordPanel.offsetHeight;
-            let keywordTop = 100 + scrollY;
-
-            keywordTop = Math.min(keywordTop, panelMaxTop - keywordPanelHeight);
-            keywordTop = Math.max(keywordTop, scrollY + 20);
-
-            keywordPanel.style.top = keywordTop + 'px';
-        }
-    }
-
-    let scrollTimeout;
-    function throttledScroll() {
-        if (scrollTimeout) {
-            clearTimeout(scrollTimeout);
-        }
-        scrollTimeout = setTimeout(() => {
-            calculateLimits();
-            handleScroll();
-        }, 10);
-    }
-
-    window.addEventListener('scroll', throttledScroll);
-    setTimeout(calculateLimits, 1500);
-}
+// setupFloatingPanelScrollBehavior function removed - no longer needed
 
 function initializeHTMLDropdowns() {
     const categoryItems = document.querySelectorAll('.category-item');
