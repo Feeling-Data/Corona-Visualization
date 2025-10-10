@@ -1,6 +1,7 @@
 let svg, xScale, yScale, colorScale, allData, filteredData;
 let currentSelection = null;
 let currentKeywordSelection = null;
+let currentCategorySelection = null; // Track current category filter selection
 let legendExpanded = {};
 let nodeMap = new Map(); // OPTIMIZATION: Fast O(1) node lookup by ID
 let keywordIndex = new Map(); // OPTIMIZATION: Fast keyword-to-nodes lookup
@@ -168,7 +169,7 @@ document.addEventListener('DOMContentLoaded', function () {
     // Scroll setup removed - no longer needed for responsive design
 
     function loadData() {
-        d3.csv('data.csv').then(function (rawData) {
+        d3.csv('final_data.csv').then(function (rawData) {
             processData(rawData);
         }).catch(function (error) {
             console.error("Error loading data:", error);
@@ -257,13 +258,6 @@ document.addEventListener('DOMContentLoaded', function () {
         return null;
     }
 
-    function generateRandomDate(minDate, maxDate) {
-        const minTime = minDate.getTime();
-        const maxTime = maxDate.getTime();
-        const randomTime = minTime + Math.random() * (maxTime - minTime);
-        return new Date(randomTime);
-    }
-
     // OPTIMIZATION: Build fast lookup indices for O(1) access
     function buildDataIndices() {
         console.log('Building data indices for fast lookup...');
@@ -296,90 +290,36 @@ document.addEventListener('DOMContentLoaded', function () {
         svg.select('.status-message').remove();
 
         console.log('Raw data sample:', rawData.slice(0, 3));
-        console.log('Total raw records:', rawData.length);
+        console.log('Total records:', rawData.length);
 
-        const filtered = rawData.filter(d =>
-            d.type2 && typeof d.type2 === 'string' &&
-            d.type2.toLowerCase().includes('corona')
-        );
-
-        console.log('Filtered coronavirus records:', filtered.length);
-
-        const validDates = [];
-        let unknownCount = 0;
-
-        filtered.forEach(d => {
+        // Data is already filtered and preprocessed by preprocess_data.py
+        // Just parse dates and prepare for visualization
+        rawData.forEach((d, index) => {
             const dateString = d['first_date_parsed'];
             const parsedDate = parseUKDate(dateString);
 
-            if (parsedDate && parsedDate !== 'unknown') {
-                validDates.push(parsedDate);
-            } else {
-                unknownCount++;
-            }
-        });
+            // Parse date (should be valid since preprocessed)
+            d.parsedDate = parsedDate || new Date();
+            d.isGeneratedDate = false;
 
-        console.log('Valid dates found:', validDates.length);
-        console.log('Unknown/invalid dates found:', unknownCount);
-
-        const forcedStartDate = new Date(2020, 2, 13);
-        let minDate, maxDate;
-        if (validDates.length > 0) {
-            minDate = forcedStartDate;
-            maxDate = new Date(Math.max(...validDates));
-        } else {
-            minDate = forcedStartDate;
-            maxDate = new Date(2024, 11, 31);
-        }
-
-        console.log('Date range:', minDate.toISOString().split('T')[0], 'to', maxDate.toISOString().split('T')[0]);
-
-        let generatedDateCount = 0;
-        filtered.forEach((d, index) => {
-            const dateString = d['first_date_parsed'];
-            const parsedDate = parseUKDate(dateString);
-
-            if (parsedDate && parsedDate !== 'unknown') {
-                if (parsedDate < forcedStartDate) {
-                    d.parsedDate = generateRandomDate(forcedStartDate, maxDate);
-                    d.isGeneratedDate = true;
-                    d.originalDateString = dateString;
-                    generatedDateCount++;
-                    console.log(`Adjusted early date ${dateString} to random date after 2020-03-13`);
-                } else {
-                    d.parsedDate = parsedDate;
-                    d.isGeneratedDate = false;
-                }
-            } else {
-                d.parsedDate = generateRandomDate(forcedStartDate, maxDate);
-                d.isGeneratedDate = true;
-                d.originalDateString = dateString;
-                generatedDateCount++;
-            }
-
-            if (!d.id || d.id === 'missing' || d.id === '' || isNaN(+d.id)) {
+            // Ensure ID is correct type
+            if (!d.id || d.id === 'missing' || d.id === '') {
                 d.id = `gen_${index}_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
-            } else {
+            } else if (!isNaN(+d.id)) {
                 d.id = +d.id;
             }
 
-            d.keywords = d["first_keywords_auto"] ? d["first_keywords_auto"].toLowerCase().split(',').map(k => k.trim()).filter(k => k.length > 0) : [];
+            // Use preprocessed keywords (keywords_processed field)
+            d.keywords = d.keywords_processed ? d.keywords_processed.split(',').map(k => k.trim()).filter(k => k.length > 0) : [];
 
-            if (d.type1 === 'Scottish Government and Parliament') {
-                d.type1 = 'Parliament';
-            }
-
-            d.group = type1GroupMap[d.type1] || 'Other';
-
-            if (d.type1 === 'Scottish Government and Parliament') {
-                d.type1 = 'Parliament';
+            // Group is already set by preprocessing script, but fallback if missing
+            if (!d.group) {
+                d.group = type1GroupMap[d.type1] || 'Other';
             }
         });
 
-        console.log(`Total records with generated dates: ${generatedDateCount} out of ${filtered.length}`);
-
-        filteredData = filtered;
-        console.log('Filtered data:', filteredData);
+        filteredData = rawData;
+        console.log('Processed data:', filteredData);
         allData = filteredData;
 
         // OPTIMIZATION: Build fast lookup indices for large datasets
@@ -390,13 +330,13 @@ document.addEventListener('DOMContentLoaded', function () {
                 .attr('x', width / 2)
                 .attr('y', height / 2)
                 .attr('class', 'status-message')
-                .text("No coronavirus data found")
+                .text("No data found")
                 .attr('fill', 'red');
             return;
         }
 
-        console.log(`Successfully processed ${filteredData.length} coronavirus records with valid dates`);
-        console.log('Final date range:',
+        console.log(`Successfully loaded ${filteredData.length} records`);
+        console.log('Date range:',
             d3.min(filteredData, d => d.parsedDate).toISOString().split('T')[0],
             'to',
             d3.max(filteredData, d => d.parsedDate).toISOString().split('T')[0]
@@ -425,15 +365,36 @@ document.addEventListener('DOMContentLoaded', function () {
         console.log('Y axis will cover:', startDate.toISOString().split('T')[0], 'to', endDate.toISOString().split('T')[0]);
         console.log('Available height for beeswarm:', availableHeight);
 
-        // Simple time scale using full available height
+        // Create a density-aware time scale that spreads out dense periods
+        console.log('Creating density-aware time scale...');
+
+        // Count nodes per month to identify dense periods
+        const monthCounts = {};
+        filteredData.forEach(d => {
+            const monthKey = `${d.parsedDate.getFullYear()}-${String(d.parsedDate.getMonth() + 1).padStart(2, '0')}`;
+            monthCounts[monthKey] = (monthCounts[monthKey] || 0) + 1;
+        });
+
+        console.log('Node density by month:', monthCounts);
+
+        // Create a custom Y positioning that starts at top and spreads dense periods
+        const yStart = margin.top + 20; // Start near top
+        const yEnd = margin.top + availableHeight - 20; // End near bottom
+        const totalHeight = yEnd - yStart;
+
+        // Sort all data by date and assign sequential Y positions
+        const sortedData = [...filteredData].sort((a, b) => a.parsedDate - b.parsedDate);
+
+        // Assign Y positions with equal spacing
+        sortedData.forEach((d, i) => {
+            const ratio = i / (sortedData.length - 1);
+            d.adjustedY = yStart + (ratio * totalHeight);
+        });
+
+        // Create a simple time scale for reference (not used for positioning)
         yScale = d3.scaleTime()
             .domain([startDate, endDate])
-            .range([margin.top + 20, margin.top + availableHeight]);
-
-        // Assign Y positions directly using the time scale
-        filteredData.forEach(d => {
-            d.adjustedY = yScale(d.parsedDate);
-        });
+            .range([yStart, yEnd]);
 
         // Debug: Check the actual Y position distribution
         const yPositions = filteredData.map(d => d.adjustedY);
@@ -443,17 +404,6 @@ document.addEventListener('DOMContentLoaded', function () {
         console.log('Expected Y range:', margin.top + 20, 'to', margin.top + availableHeight);
         console.log('Data spans', ((maxY - minY) / availableHeight * 100).toFixed(1) + '% of available height');
 
-        // If data doesn't span enough height, stretch it
-        if ((maxY - minY) / availableHeight < 0.5) {
-            console.log('Data too compressed, stretching Y positions...');
-            const stretchFactor = availableHeight / (maxY - minY) * 0.8; // Use 80% of available height
-            const centerY = (minY + maxY) / 2;
-            filteredData.forEach(d => {
-                d.adjustedY = centerY + (d.adjustedY - centerY) * stretchFactor;
-            });
-            console.log('Y positions stretched by factor:', stretchFactor);
-        }
-
         // With 100% width, use most of the available width for the visualization
         const availableWidth = width * 0.9; // Use 90% of the full width for better spacing
         const centerOffset = (width - availableWidth) / 2;
@@ -462,7 +412,7 @@ document.addEventListener('DOMContentLoaded', function () {
         xScale = d3.scalePoint()
             .domain(groupOrder)
             .range([visualizationStart, visualizationStart + availableWidth])
-            .padding(0.4); // Increased padding for better cluster separation
+            .padding(0.2); // Reduced padding to make categories wider
 
         console.log('X Scale setup:', {
             domain: groupOrder,
@@ -562,6 +512,28 @@ document.addEventListener('DOMContentLoaded', function () {
             return;
         }
 
+        // Store the current selection
+        currentCategorySelection = {
+            type1: selectedType1,
+            category: type1GroupMap[selectedType1]
+        };
+
+        // Show the selected tag
+        showSelectedTag(selectedType1, type1GroupMap[selectedType1]);
+
+        // Close the keyword panel if it's open
+        const keywordPanel = document.getElementById('keyword-panel');
+        if (keywordPanel) {
+            keywordPanel.style.display = 'none';
+            keywordPanel.innerHTML = '';
+        }
+
+        // Remove the panel-open class to center the visualization
+        const visualizationContainer = document.getElementById('visualization-container');
+        if (visualizationContainer) {
+            visualizationContainer.classList.remove('panel-open');
+        }
+
         svg.selectAll('.connection-line').remove();
 
         svg.selectAll('.node')
@@ -609,6 +581,33 @@ document.addEventListener('DOMContentLoaded', function () {
         console.log(`✅ Highlighted ${nodesWithType1.length} nodes for type1: ${selectedType1} in ${(endTime - startTime).toFixed(2)}ms`);
     }
 
+    function showSelectedTag(type1, category) {
+        console.log('Showing selected tag:', type1, 'for category:', category);
+
+        // Hide all selected tags first
+        document.querySelectorAll('.selected-tag').forEach(tag => {
+            tag.classList.remove('show');
+        });
+
+        // Show the selected tag for this category
+        const selectedTag = document.querySelector(`.selected-tag[data-category="${category}"]`);
+        if (selectedTag) {
+            const textSpan = selectedTag.querySelector('.selected-tag-text');
+            if (textSpan) {
+                textSpan.textContent = type1;
+            }
+            selectedTag.classList.add('show');
+        }
+    }
+
+    // Make functions globally accessible
+    window.hideAllSelectedTags = function () {
+        console.log('Hiding all selected tags');
+        document.querySelectorAll('.selected-tag').forEach(tag => {
+            tag.classList.remove('show');
+        });
+    };
+
     // Make highlightType1 globally accessible for debugging
     window.highlightType1 = highlightType1;
 
@@ -639,14 +638,13 @@ document.addEventListener('DOMContentLoaded', function () {
 
         groupedData.forEach((groupData, groupName) => {
             const groupX = xScale(groupName);
-            const groupWidth = isPortrait ? 5 : 30;
 
-            console.log(`Group ${groupName}: centerX=${groupX}, width=${groupWidth}`);
+            console.log(`Group ${groupName}: centerX=${groupX}`);
 
             const sortedData = groupData.sort((a, b) => a.parsedDate - b.parsedDate);
 
             sortedData.forEach((d, i) => {
-                // Initialize positions for force simulation
+                // Initialize positions at group center - clustering will handle positioning
                 d.displayX = groupX;
                 d.displayY = d.adjustedY;
                 d.x = groupX;
@@ -703,33 +701,95 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // Floating panel scroll behavior removed - panels will use fixed positioning
 
-    function applyCollisionAvoidance(nodes) {
-        // OPTIMIZATION: Adaptive simulation iterations based on dataset size
-        const startTime = performance.now();
-        const dataSize = filteredData.length;
+    // Force-directed beeswarm function
+    function createBeeswarmForce() {
+        let x = d => d.x0;
+        let y = d => d.y0;
+        let r = d => d.r;
+        let ticks = 300;
 
-        // Fewer iterations for larger datasets to maintain performance
-        const iterations = dataSize > 2000 ? 100 : dataSize > 1000 ? 150 : 200;
+        function beeswarm(data) {
+            const entries = data.map(d => {
+                return {
+                    x0: typeof x === "function" ? x(d) : x,
+                    y0: typeof y === "function" ? y(d) : y,
+                    r: typeof r === "function" ? r(d) : r,
+                    data: d
+                };
+            });
 
-        console.log(`Running force simulation with ${iterations} iterations for ${dataSize} nodes...`);
+            const simulation = d3.forceSimulation(entries)
+                .force("x", d3.forceX(d => d.x0))
+                .force("y", d3.forceY(d => d.y0))
+                .force("collide", d3.forceCollide(d => d.r));
 
-        // Simple force simulation with stronger collision avoidance for larger dots
-        const simulation = d3.forceSimulation(filteredData)
-            .force('collision', d3.forceCollide().radius(d => d.radius + 6).strength(1.4))
-            .force('x', d3.forceX(d => xScale(d.group)).strength(0.8))
-            .force('y', d3.forceY(d => d.displayY).strength(0.1))
-            .alphaDecay(0.05) // OPTIMIZATION: Faster convergence
-            .velocityDecay(0.3) // OPTIMIZATION: More friction for faster settling
-            .stop();
+            for (let i = 0; i < ticks; i++) simulation.tick();
 
-        // Run simulation until it settles
-        for (let i = 0; i < iterations; ++i) {
-            simulation.tick();
+            return entries;
         }
 
-        // Update node positions
-        nodes.attr('cx', d => d.x)
-            .attr('cy', d => d.y);
+        beeswarm.x = f => f ? (x = f, beeswarm) : x;
+        beeswarm.y = f => f ? (y = f, beeswarm) : y;
+        beeswarm.r = f => f ? (r = f, beeswarm) : r;
+        beeswarm.ticks = n => n ? (ticks = n, beeswarm) : ticks;
+
+        return beeswarm;
+    }
+
+    function applyCollisionAvoidance(nodes) {
+        console.log('🔥🔥🔥 Creating force-directed clustering around vertical lines...');
+        console.log('🔥🔥🔥 Function called with', nodes.size(), 'nodes');
+        const startTime = performance.now();
+
+        // Debug: Check filteredData
+        console.log('🔥🔥🔥 FilteredData length:', filteredData.length);
+        if (filteredData.length > 0) {
+            console.log('🔥🔥🔥 Sample data object:', filteredData[0]);
+            console.log('🔥🔥🔥 Available groups:', [...new Set(filteredData.map(d => d.group))]);
+        }
+
+        // Group data by category for separate force simulations
+        console.log('filteredData', filteredData);
+        const groupedData = d3.group(filteredData, d => d.group);
+        console.log('🔥🔥🔥 Grouped data (Map):', groupedData);
+        console.log('🔥🔥🔥 Grouped data keys:', Array.from(groupedData.keys()));
+
+        // Run force simulation for each group
+        groupedData.forEach((groupData, groupName) => {
+            console.log(`Running force simulation for ${groupName} (${groupData.length} nodes)`);
+
+            const groupCenterX = xScale(groupName);
+
+            // Give nodes initial random positions so forces can work
+            groupData.forEach(node => {
+                const initialX = groupCenterX + (Math.random() - 0.5) * 100; // Random horizontal offset
+                const initialY = node.adjustedY + (Math.random() - 0.5) * 20; // Small random vertical offset
+                node.x = initialX;
+                node.y = initialY;
+                console.log(`  Node ${node.id}: initial x=${initialX.toFixed(1)}, y=${initialY.toFixed(1)}`);
+            });
+
+            console.log(`${groupName}: Initial positions set with random offsets`);
+
+            // Create force simulation for this group
+            const simulation = d3.forceSimulation(groupData)
+                .force('x', d3.forceX(groupCenterX).strength(0.1)) // Weak pull toward group center
+                .force('y', d3.forceY(d => d.adjustedY).strength(0.2)) // Weak hold on Y position - allows clustering
+                .force('collide', d3.forceCollide().radius(d => d.radius + 8).strength(1.0)) // Strong collision avoidance
+                .stop();
+
+            // Run simulation for many ticks to allow natural clustering
+            for (let i = 0; i < 200; ++i) {
+                simulation.tick();
+            }
+
+            // Log final positions to see if simulation worked
+            groupData.forEach(node => {
+                console.log(`  Node ${node.id}: final x=${node.x.toFixed(1)}, y=${node.y.toFixed(1)}`);
+            });
+
+            console.log(`${groupName}: Force simulation complete - nodes should now cluster around vertical line`);
+        });
 
         // Update data with final positions
         filteredData.forEach(d => {
@@ -737,8 +797,12 @@ document.addEventListener('DOMContentLoaded', function () {
             d.displayY = d.y;
         });
 
+        // Update node positions
+        nodes.attr('cx', d => d.displayX)
+            .attr('cy', d => d.displayY);
+
         const endTime = performance.now();
-        console.log(`✅ Force simulation complete in ${(endTime - startTime).toFixed(2)}ms`);
+        console.log(`✅ Force-directed clustering complete in ${(endTime - startTime).toFixed(2)}ms`);
     }
 
     function createConnectionLines() {
@@ -1044,17 +1108,15 @@ document.addEventListener('DOMContentLoaded', function () {
             }
 
             const displayText = keyword;
-            const textLength = displayText.length * 5;
-            const rectWidth = Math.max(textLength + 10, 25);
 
-            html += `<div style="position: absolute; left: ${keywordX - rectWidth / 2}px; top: ${keywordY - 8}px;
+            html += `<div style="position: absolute; left: ${keywordX}px; top: ${keywordY}px;
+                transform: translate(-50%, -50%);
                 background: #000000; border: 1px solid #FFFFFF; border-radius: 15px;
                 padding: 4px 16px; color: #FFF; text-align: center;
                 font-family: 'Neue Haas Grotesk Display Pro'; font-size: 18px; font-style: normal; font-weight: 500; line-height: normal;
-                cursor: pointer; user-select: none; z-index: 3; transition: all 0.2s ease;"
+                cursor: pointer; user-select: none; z-index: 3; transition: all 0.2s ease;
+                white-space: nowrap;"
                 data-keyword="${keyword}" class="keyword-clickable"
-                onmouseover="if(!this.classList.contains('selected')) { this.style.background='#333333'; } this.style.transform='scale(1.05)'"
-                onmouseout="if(!this.classList.contains('selected')) { this.style.background='#000000'; } this.style.transform='scale(1)'"
                 title="${keyword}">
                 ${displayText}
                 </div>`;
@@ -1065,6 +1127,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
         // 🔗 重新绑定关键词点击事件
         panel.querySelectorAll('.keyword-clickable').forEach(element => {
+            // Click event
             element.addEventListener('click', function () {
                 const keyword = this.getAttribute('data-keyword');
                 console.log('🔗 Keyword clicked:', keyword);
@@ -1091,10 +1154,46 @@ document.addEventListener('DOMContentLoaded', function () {
                 highlightKeyword(keyword);
             });
 
+            // Hover events
+            element.addEventListener('mouseenter', function () {
+                if (!this.classList.contains('selected')) {
+                    this.style.background = '#333333';
+                }
+                this.style.transform = 'translate(-50%, -50%) scale(1.05)';
+            });
+
+            element.addEventListener('mouseleave', function () {
+                if (!this.classList.contains('selected')) {
+                    this.style.background = '#000000';
+                }
+                this.style.transform = 'translate(-50%, -50%) scale(1)';
+            });
+
+            // Touch event
             element.addEventListener('touchend', function (e) {
                 e.preventDefault();
                 const keyword = this.getAttribute('data-keyword');
                 console.log('🔗 Keyword touched:', keyword);
+
+                // Toggle selected state for touch
+                const isSelected = this.classList.contains('selected');
+
+                // Remove selected class from all other keywords
+                panel.querySelectorAll('.keyword-clickable').forEach(el => {
+                    el.classList.remove('selected');
+                    el.style.background = '#000000';
+                    el.style.color = '#FFF';
+                    el.style.border = '1px solid #FFFFFF';
+                });
+
+                // Toggle current keyword
+                if (!isSelected) {
+                    this.classList.add('selected');
+                    this.style.background = '#FFFFFF';
+                    this.style.color = '#000000';
+                    this.style.border = '1px solid #000000';
+                }
+
                 highlightKeyword(keyword);
             });
         });
@@ -1138,11 +1237,10 @@ document.addEventListener('DOMContentLoaded', function () {
 
         // OPTIMIZATION: Limit connection lines for very popular keywords
         const MAX_CONNECTIONS = 500; // Limit total connections to maintain performance
-        const keywordThreshold = 50;
-        const isHighFrequency = nodesWithKeyword.length > keywordThreshold;
-        const lineOpacity = isHighFrequency ? 0.2 : 0.4;
-        const lineColor = isHighFrequency ? '#666666' : '#999999';
-        const lineWidth = isHighFrequency ? 0.5 : 0.8;
+        // Use consistent style for all connection lines regardless of quantity
+        const lineOpacity = 0.5;
+        const lineColor = '#BBBBBB';
+        const lineWidth = 1.0;
 
         // Calculate how many connections we'd create
         const totalPossibleConnections = (nodesWithKeyword.length * (nodesWithKeyword.length - 1)) / 2;
@@ -1267,10 +1365,16 @@ function resetVisualization() {
 
     currentSelection = null;
     currentKeywordSelection = null;
+    currentCategorySelection = null;
 
     Object.keys(legendExpanded).forEach(key => {
         legendExpanded[key] = false;
     });
+
+    // Hide all selected tags
+    if (window.hideAllSelectedTags) {
+        window.hideAllSelectedTags();
+    }
 
     // SVG dropdown cleanup removed - using HTML dropdowns
 
@@ -1356,6 +1460,26 @@ function initializeHTMLDropdowns() {
                 closeDropdown();
                 openDropdown(item, dropdown);
             }
+        });
+    });
+
+    // Add click handlers for the "x" buttons on selected tags
+    document.querySelectorAll('.selected-tag-close').forEach(closeBtn => {
+        closeBtn.addEventListener('click', function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+            console.log('Clear selection clicked');
+
+            // Clear the category selection
+            currentCategorySelection = null;
+
+            // Hide all selected tags
+            if (window.hideAllSelectedTags) {
+                window.hideAllSelectedTags();
+            }
+
+            // Reset the visualization
+            resetVisualization();
         });
     });
 

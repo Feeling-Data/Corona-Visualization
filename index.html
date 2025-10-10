@@ -211,6 +211,12 @@
                 margin-bottom: 20px;
             }
 
+            .category-wrapper {
+                display: flex;
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
             .svg-container {
                 width: 100%;
                 display: flex;
@@ -223,7 +229,7 @@
                 display: flex;
                 align-items: center;
                 justify-content: space-between;
-                width: 175px;
+                width: 217px;
                 padding: 8px 0;
                 border-bottom: 1px solid #ccc;
                 transition: all 0.3s ease;
@@ -245,11 +251,16 @@
             }
 
             .category-caret {
-                color: #FFF;
-                font-size: 16px;
                 margin-left: 15px;
                 transition: transform 0.3s ease;
                 user-select: none;
+                display: flex;
+                align-items: center;
+            }
+
+            .category-caret svg {
+                width: 21px;
+                height: 20px;
             }
 
             .category-item.active .category-caret {
@@ -264,7 +275,7 @@
                 border: 1px solid #444;
                 border-radius: 8px;
                 padding: 10px;
-                min-width: 180px;
+                width: 217px;
                 z-index: 1001;
                 display: none;
                 backdrop-filter: blur(10px);
@@ -276,8 +287,7 @@
             }
 
             .dropdown-item {
-                background: rgba(0, 0, 0, 0.4);
-                border-radius: 15px;
+
                 padding: 8px 12px;
                 margin: 4px 0;
                 color: #ffffff;
@@ -292,6 +302,45 @@
 
             .dropdown-item:hover {
                 background: rgba(255, 255, 255, 0.2);
+            }
+
+            .selected-tag {
+                display: none;
+                background: #FFFFFF;
+                padding: 8px 12px;
+                margin-top: 8px;
+                width: 217px;
+                align-items: center;
+                justify-content: space-between;
+                animation: fadeIn 0.3s ease;
+            }
+
+            .selected-tag.show {
+                display: flex;
+            }
+
+            .selected-tag-text {
+                color: #000;
+                font-family: "Neue Haas Grotesk Display Pro";
+                font-size: 20px;
+                font-style: normal;
+                font-weight: 500;
+                line-height: normal;
+                flex: 1;
+            }
+
+            .selected-tag-close {
+                color: #000;
+                font-size: 20px;
+                cursor: pointer;
+                line-height: 1;
+                padding: 0 4px;
+                transition: transform 0.2s ease;
+                user-select: none;
+            }
+
+            .selected-tag-close:hover {
+                transform: scale(1.2);
             }
 
             @keyframes fadeIn {
@@ -336,21 +385,73 @@
         <div>
             <div id="visualization-container" class="visualization-container">
                 <div id="category-nav" class="category-navigation">
-                    <div class="category-item" data-category="Media">
-                        <span class="category-text">Media</span>
-                        <span class="category-caret">^</span>
+                    <div class="category-wrapper">
+                        <div class="category-item" data-category="Media">
+                            <span class="category-text">Media</span>
+                            <span class="category-caret">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="21" height="20" viewBox="0 0 21 20"
+                                    fill="none">
+                                    <path
+                                        d="M11.0718 15.8828C10.5835 16.3711 9.79053 16.3711 9.30225 15.8828L1.80225 8.38281C1.31396 7.89453 1.31396 7.10156 1.80225 6.61328C2.29053 6.125 3.0835 6.125 3.57178 6.61328L10.189 13.2305L16.8062 6.61719C17.2944 6.12891 18.0874 6.12891 18.5757 6.61719C19.064 7.10547 19.064 7.89844 18.5757 8.38672L11.0757 15.8867L11.0718 15.8828Z"
+                                        fill="white" />
+                                </svg>
+                            </span>
+                        </div>
+                        <div class="selected-tag" data-category="Media">
+                            <span class="selected-tag-text"></span>
+                            <span class="selected-tag-close">x</span>
+                        </div>
                     </div>
-                    <div class="category-item" data-category="Entertainment">
-                        <span class="category-text">Entertainment</span>
-                        <span class="category-caret">^</span>
+                    <div class="category-wrapper">
+                        <div class="category-item" data-category="Entertainment">
+                            <span class="category-text">Entertainment</span>
+                            <span class="category-caret">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="21" height="20" viewBox="0 0 21 20"
+                                    fill="none">
+                                    <path
+                                        d="M11.0718 15.8828C10.5835 16.3711 9.79053 16.3711 9.30225 15.8828L1.80225 8.38281C1.31396 7.89453 1.31396 7.10156 1.80225 6.61328C2.29053 6.125 3.0835 6.125 3.57178 6.61328L10.189 13.2305L16.8062 6.61719C17.2944 6.12891 18.0874 6.12891 18.5757 6.61719C19.064 7.10547 19.064 7.89844 18.5757 8.38672L11.0757 15.8867L11.0718 15.8828Z"
+                                        fill="white" />
+                                </svg>
+                            </span>
+                        </div>
+                        <div class="selected-tag" data-category="Entertainment">
+                            <span class="selected-tag-text"></span>
+                            <span class="selected-tag-close">x</span>
+                        </div>
                     </div>
-                    <div class="category-item" data-category="Knowledge">
-                        <span class="category-text">Knowledge</span>
-                        <span class="category-caret">^</span>
+                    <div class="category-wrapper">
+                        <div class="category-item" data-category="Knowledge">
+                            <span class="category-text">Knowledge</span>
+                            <span class="category-caret">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="21" height="20" viewBox="0 0 21 20"
+                                    fill="none">
+                                    <path
+                                        d="M11.0718 15.8828C10.5835 16.3711 9.79053 16.3711 9.30225 15.8828L1.80225 8.38281C1.31396 7.89453 1.31396 7.10156 1.80225 6.61328C2.29053 6.125 3.0835 6.125 3.57178 6.61328L10.189 13.2305L16.8062 6.61719C17.2944 6.12891 18.0874 6.12891 18.5757 6.61719C19.064 7.10547 19.064 7.89844 18.5757 8.38672L11.0757 15.8867L11.0718 15.8828Z"
+                                        fill="white" />
+                                </svg>
+                            </span>
+                        </div>
+                        <div class="selected-tag" data-category="Knowledge">
+                            <span class="selected-tag-text"></span>
+                            <span class="selected-tag-close">x</span>
+                        </div>
                     </div>
-                    <div class="category-item" data-category="Government">
-                        <span class="category-text">Government</span>
-                        <span class="category-caret">^</span>
+                    <div class="category-wrapper">
+                        <div class="category-item" data-category="Government">
+                            <span class="category-text">Government</span>
+                            <span class="category-caret">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="21" height="20" viewBox="0 0 21 20"
+                                    fill="none">
+                                    <path
+                                        d="M11.0718 15.8828C10.5835 16.3711 9.79053 16.3711 9.30225 15.8828L1.80225 8.38281C1.31396 7.89453 1.31396 7.10156 1.80225 6.61328C2.29053 6.125 3.0835 6.125 3.57178 6.61328L10.189 13.2305L16.8062 6.61719C17.2944 6.12891 18.0874 6.12891 18.5757 6.61719C19.064 7.10547 19.064 7.89844 18.5757 8.38672L11.0757 15.8867L11.0718 15.8828Z"
+                                        fill="white" />
+                                </svg>
+                            </span>
+                        </div>
+                        <div class="selected-tag" data-category="Government">
+                            <span class="selected-tag-text"></span>
+                            <span class="selected-tag-close">x</span>
+                        </div>
                     </div>
                 </div>
                 <div id="svg-container" class="svg-container"></div>
