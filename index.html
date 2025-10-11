@@ -76,7 +76,7 @@
 
             .node {
                 cursor: pointer;
-                transition: all 0.2s ease;
+                /* transition: all 0.2s ease; */
                 filter: drop-shadow(0 0 6px rgba(255, 255, 255, 0.4));
                 stroke: none;
             }
@@ -105,7 +105,7 @@
                 stroke-width: 0.3;
                 fill: none;
                 opacity: 0.08;
-                transition: all 0.3s ease;
+                /* transition: all 0.3s ease; */
             }
 
             .connection-line.highlighted {
@@ -133,6 +133,7 @@
             #keyword-panel {
                 top: 100px;
                 width: 555px;
+                margin-top: 40px;
                 height: 791px !important;
                 right: 10px;
                 overflow: visible;
@@ -175,7 +176,7 @@
             }
 
             .keyword-clickable {
-                transition: all 0.2s ease !important;
+                /* transition: all 0.2s ease !important; */
                 white-space: nowrap !important;
                 box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1) !important;
             }
@@ -198,11 +199,11 @@
                 flex-direction: column;
                 align-items: center;
                 z-index: 1000;
-                transition: transform 0.3s ease-in-out;
+                /* transition: transform 0.3s ease-in-out; */
             }
 
             .visualization-container.panel-open {
-                transform: translateX(-90%);
+                transform: translateX(-78%);
             }
 
             .category-navigation {
@@ -283,7 +284,7 @@
 
             .category-dropdown.show {
                 display: block;
-                animation: fadeIn 0.3s ease;
+                /* animation: fadeIn 0.3s ease; */
             }
 
             .dropdown-item {
@@ -309,14 +310,16 @@
                 background: #FFFFFF;
                 padding: 8px 12px;
                 margin-top: 8px;
-                width: 217px;
+                width: 190px;
                 align-items: center;
                 justify-content: space-between;
-                animation: fadeIn 0.3s ease;
+                /* animation: fadeIn 0.3s ease; */
             }
 
             .selected-tag.show {
                 display: flex;
+                position: absolute;
+                top: 50px;
             }
 
             .selected-tag-text {

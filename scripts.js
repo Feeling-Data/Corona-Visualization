@@ -378,8 +378,8 @@ document.addEventListener('DOMContentLoaded', function () {
         console.log('Node density by month:', monthCounts);
 
         // Create a custom Y positioning that starts at top and spreads dense periods
-        const yStart = margin.top + 20; // Start near top
-        const yEnd = margin.top + availableHeight - 20; // End near bottom
+        const yStart = -315; // Start near top
+        const yEnd = margin.top + availableHeight + 110; // End near bottom
         const totalHeight = yEnd - yStart;
 
         // Sort all data by date and assign sequential Y positions
@@ -819,7 +819,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
         const sizeScale = d3.scaleSqrt()
             .domain(keywordExtent)
-            .range([6, 12]); // Increased from [3, 5] to [6, 12] for much larger dots
+            .range([12, 12]); // Increased from [3, 5] to [6, 12] for much larger dots
 
         filteredData.forEach(d => {
             d.radius = sizeScale(d.keywords.length);
@@ -979,6 +979,13 @@ document.addEventListener('DOMContentLoaded', function () {
             (articleData && articleData.parsedDate ? articleData.parsedDate.toLocaleDateString() : 'N/A');
 
         let html = `
+        <div style="position: relative;">
+            <div style="position: absolute; top: -5px; right: 0px; cursor: pointer; z-index: 10; color: #FFF; font-size: 30px; font-weight: 300; line-height: 1; padding: 5px 10px; transition: transform 0.2s ease;"
+                 id="keyword-panel-close"
+                 onmouseover="this.style.transform='scale(1.2)'"
+                 onmouseout="this.style.transform='scale(1)'"
+                 title="Close">×</div>
+        </div>
         <div style="margin-bottom: 15px; border-bottom: 1px solid #444; padding-bottom: 10px;">
             <div style="margin-bottom: 8px;">
                 <div style="color: #FFF; font-family: 'Neue Haas Grotesk Display Pro'; font-size: 18px; font-style: normal; font-weight: 500; line-height: normal; text-transform: uppercase; margin-bottom: 2px;">TITLE</div>
@@ -1015,8 +1022,8 @@ document.addEventListener('DOMContentLoaded', function () {
             if (numKeywords <= 8) {
                 // 单层椭圆分布，偏向竖直
                 angle = (index / numKeywords) * 2 * Math.PI - Math.PI / 2;
-                const radiusX = 120;  // 水平半径增加
-                const radiusY = 180; // 垂直半径增加
+                const radiusX = 200;  // 水平半径增加 (increased from 120)
+                const radiusY = 220; // 垂直半径增加 (increased from 180)
 
                 const keywordX = centerX + radiusX * Math.cos(angle);
                 const keywordY = centerY + radiusY * Math.sin(angle);
@@ -1028,8 +1035,8 @@ document.addEventListener('DOMContentLoaded', function () {
                 if (index < 6) {
                     // 内层
                     angle = (index / 6) * 2 * Math.PI - Math.PI / 2;
-                    const radiusX = 80;
-                    const radiusY = 120;
+                    const radiusX = 140;  // increased from 80
+                    const radiusY = 170;  // increased from 120
 
                     const keywordX = centerX + radiusX * Math.cos(angle);
                     const keywordY = centerY + radiusY * Math.sin(angle);
@@ -1041,8 +1048,8 @@ document.addEventListener('DOMContentLoaded', function () {
                     const outerCount = numKeywords - 6;
                     const circleIndex = index - 6;
                     angle = (circleIndex / outerCount) * 2 * Math.PI - Math.PI / 2;
-                    const radiusX = 140;
-                    const radiusY = 200;
+                    const radiusX = 220;  // increased from 140
+                    const radiusY = 240;  // increased from 200
 
                     const keywordX = centerX + radiusX * Math.cos(angle);
                     const keywordY = centerY + radiusY * Math.sin(angle);
@@ -1082,16 +1089,16 @@ document.addEventListener('DOMContentLoaded', function () {
 
             if (numKeywords <= 8) {
                 const angle = (index / numKeywords) * 2 * Math.PI - Math.PI / 2;
-                const radiusX = 120;
-                const radiusY = 180;
+                const radiusX = 200;  // increased from 120
+                const radiusY = 220;  // increased from 180
 
                 keywordX = centerX + radiusX * Math.cos(angle);
                 keywordY = centerY + radiusY * Math.sin(angle);
             } else {
                 if (index < 6) {
                     const angle = (index / 6) * 2 * Math.PI - Math.PI / 2;
-                    const radiusX = 80;
-                    const radiusY = 120;
+                    const radiusX = 140;  // increased from 80
+                    const radiusY = 170;  // increased from 120
 
                     keywordX = centerX + radiusX * Math.cos(angle);
                     keywordY = centerY + radiusY * Math.sin(angle);
@@ -1099,8 +1106,8 @@ document.addEventListener('DOMContentLoaded', function () {
                     const outerCount = numKeywords - 6;
                     const circleIndex = index - 6;
                     const angle = (circleIndex / outerCount) * 2 * Math.PI - Math.PI / 2;
-                    const radiusX = 140;
-                    const radiusY = 200;
+                    const radiusX = 220;  // increased from 140
+                    const radiusY = 240;  // increased from 200
 
                     keywordX = centerX + radiusX * Math.cos(angle);
                     keywordY = centerY + radiusY * Math.sin(angle);
@@ -1124,6 +1131,17 @@ document.addEventListener('DOMContentLoaded', function () {
 
         html += '</div>';
         panel.innerHTML = html;
+
+        // Add close button event listener
+        const closeButton = document.getElementById('keyword-panel-close');
+        if (closeButton) {
+            closeButton.addEventListener('click', function (e) {
+                e.preventDefault();
+                e.stopPropagation();
+                console.log('Close button clicked - resetting visualization');
+                resetVisualization();
+            });
+        }
 
         // 🔗 重新绑定关键词点击事件
         panel.querySelectorAll('.keyword-clickable').forEach(element => {
