@@ -7,6 +7,97 @@ let nodeMap = new Map(); // OPTIMIZATION: Fast O(1) node lookup by ID
 let keywordIndex = new Map(); // OPTIMIZATION: Fast keyword-to-nodes lookup
 // activeGroupDropdown removed - no longer using SVG dropdowns
 
+// Timeline player variables
+let timelinePlayer = {
+    isPlaying: false,
+    currentTime: 0, // 0 to 1, representing position on timeline
+    animationSpeed: 0.00005, // Speed of timeline progression (much slower)
+    animationFrame: null,
+    startDate: null,
+    endDate: null,
+    currentDate: null,
+    autoplay: true, // Auto-start the animation
+    loop: true, // Auto-loop when reaching the end
+    idleTimer: null, // Timer for idle detection
+    lastActivity: Date.now() // Track last user activity
+};
+
+// Idle detection functions
+function resetIdleTimer() {
+    timelinePlayer.lastActivity = Date.now();
+
+    // Clear existing timer
+    if (timelinePlayer.idleTimer) {
+        clearTimeout(timelinePlayer.idleTimer);
+    }
+
+    // Set new timer for 60 seconds (60000ms)
+    timelinePlayer.idleTimer = setTimeout(() => {
+        console.log('🕐 Application idle for 1+ minutes - starting auto-play');
+        if (!timelinePlayer.isPlaying) {
+            playTimeline();
+        }
+    }, 60000);
+}
+
+function trackActivity() {
+    resetIdleTimer();
+}
+
+// Parse UK date function - moved to global scope
+function parseUKDate(dateString) {
+    if (!dateString || typeof dateString !== 'string') return null;
+
+    const cleaned = dateString.trim().toLowerCase();
+
+    if (cleaned === 'unknown' || cleaned === '' || cleaned === 'n/a' ||
+        cleaned === 'na' || cleaned === 'null' || cleaned === 'undefined') {
+        return 'unknown';
+    }
+
+    // Try yyyy-mm-dd format first (ISO 8601)
+    const isoDatePattern = /^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/;
+    const isoMatch = cleaned.match(isoDatePattern);
+
+    if (isoMatch) {
+        const year = parseInt(isoMatch[1], 10);
+        const month = parseInt(isoMatch[2], 10);
+        const day = parseInt(isoMatch[3], 10);
+
+        if (month >= 1 && month <= 12 && day >= 1 && day <= 31 && year >= 1900 && year <= 2030) {
+            const date = new Date(year, month - 1, day);
+
+            if (date.getFullYear() === year &&
+                date.getMonth() === month - 1 &&
+                date.getDate() === day) {
+                return date;
+            }
+        }
+    }
+
+    // Fall back to UK date format (dd/mm/yyyy or dd-mm-yyyy)
+    const ukDatePattern = /^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/;
+    const match = cleaned.match(ukDatePattern);
+
+    if (match) {
+        const day = parseInt(match[1], 10);
+        const month = parseInt(match[2], 10);
+        const year = parseInt(match[3], 10);
+
+        if (month >= 1 && month <= 12 && day >= 1 && day <= 31 && year >= 1900 && year <= 2030) {
+            const date = new Date(year, month - 1, day);
+
+            if (date.getFullYear() === year &&
+                date.getMonth() === month - 1 &&
+                date.getDate() === day) {
+                return date;
+            }
+        }
+    }
+
+    return null;
+}
+
 // SVG dropdown functions removed - now using HTML dropdowns
 
 const type1GroupMap = {
@@ -205,58 +296,6 @@ document.addEventListener('DOMContentLoaded', function () {
         return sampleData;
     }
 
-    function parseUKDate(dateString) {
-        if (!dateString || typeof dateString !== 'string') return null;
-
-        const cleaned = dateString.trim().toLowerCase();
-
-        if (cleaned === 'unknown' || cleaned === '' || cleaned === 'n/a' ||
-            cleaned === 'na' || cleaned === 'null' || cleaned === 'undefined') {
-            return 'unknown';
-        }
-
-        // Try yyyy-mm-dd format first (ISO 8601)
-        const isoDatePattern = /^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})$/;
-        const isoMatch = cleaned.match(isoDatePattern);
-
-        if (isoMatch) {
-            const year = parseInt(isoMatch[1], 10);
-            const month = parseInt(isoMatch[2], 10);
-            const day = parseInt(isoMatch[3], 10);
-
-            if (month >= 1 && month <= 12 && day >= 1 && day <= 31 && year >= 1900 && year <= 2030) {
-                const date = new Date(year, month - 1, day);
-
-                if (date.getFullYear() === year &&
-                    date.getMonth() === month - 1 &&
-                    date.getDate() === day) {
-                    return date;
-                }
-            }
-        }
-
-        // Fall back to UK date format (dd/mm/yyyy or dd-mm-yyyy)
-        const ukDatePattern = /^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/;
-        const match = cleaned.match(ukDatePattern);
-
-        if (match) {
-            const day = parseInt(match[1], 10);
-            const month = parseInt(match[2], 10);
-            const year = parseInt(match[3], 10);
-
-            if (month >= 1 && month <= 12 && day >= 1 && day <= 31 && year >= 1900 && year <= 2030) {
-                const date = new Date(year, month - 1, day);
-
-                if (date.getFullYear() === year &&
-                    date.getMonth() === month - 1 &&
-                    date.getDate() === day) {
-                    return date;
-                }
-            }
-        }
-
-        return null;
-    }
 
     // OPTIMIZATION: Build fast lookup indices for O(1) access
     function buildDataIndices() {
@@ -301,6 +340,10 @@ document.addEventListener('DOMContentLoaded', function () {
             // Parse date (should be valid since preprocessed)
             d.parsedDate = parsedDate || new Date();
             d.isGeneratedDate = false;
+
+            // Store the original date strings for timeline functionality
+            d.firstDateParsed = d['first_date_parsed'];
+            d.lastDateParsed = d['last_date_parsed'];
 
             // Ensure ID is correct type
             if (!d.id || d.id === 'missing' || d.id === '') {
@@ -347,6 +390,9 @@ document.addEventListener('DOMContentLoaded', function () {
 
         // Initialize HTML dropdowns after data is loaded
         initializeHTMLDropdowns();
+
+        // Initialize timeline player after data is loaded
+        initializeTimelinePlayer();
     }
 
     function setupScales() {
@@ -378,8 +424,8 @@ document.addEventListener('DOMContentLoaded', function () {
         console.log('Node density by month:', monthCounts);
 
         // Create a custom Y positioning that starts at top and spreads dense periods
-        const yStart = -315; // Start near top
-        const yEnd = margin.top + availableHeight + 110; // End near bottom
+        const yStart = -320; // Start near top
+        const yEnd = margin.top + availableHeight - 15; // End near bottom
         const totalHeight = yEnd - yStart;
 
         // Sort all data by date and assign sequential Y positions
@@ -452,7 +498,8 @@ document.addEventListener('DOMContentLoaded', function () {
         svg.on('touchend', null);
 
         svg.on('click', function (event) {
-            console.log('SVG global click - checking target...');
+            trackActivity(); // Track user activity
+            console.log('SVG global click - checking target...', event.target);
 
             const target = event.target;
 
@@ -461,7 +508,10 @@ document.addEventListener('DOMContentLoaded', function () {
                 target.closest('.group-category-dropdown') ||
                 target.closest('.legend') ||
                 target.closest('.category-panel') ||
-                target.closest('.axis')) {
+                target.closest('.axis') ||
+                target.closest('#timeline-player') ||
+                target.closest('.play-button') ||
+                target.closest('#play-pause-btn')) {
                 console.log('Important element clicked - not resetting');
                 return;
             }
@@ -471,6 +521,7 @@ document.addEventListener('DOMContentLoaded', function () {
         });
 
         svg.on('touchend', function (event) {
+            trackActivity(); // Track user activity
             console.log('SVG global touch - checking target...');
 
             const target = event.target;
@@ -537,20 +588,39 @@ document.addEventListener('DOMContentLoaded', function () {
         svg.selectAll('.connection-line').remove();
 
         svg.selectAll('.node')
-            .attr('opacity', 0.1)
-            .attr('r', d => d.radius)
-            .style('filter', 'drop-shadow(0 0 2px rgba(255, 255, 255, 0.2))');
+            .each(function (d) {
+                const currentOpacity = parseFloat(d3.select(this).attr('opacity') || 0);
+                if (currentOpacity > 0) {
+                    // Only dim nodes that are currently visible
+                    d3.select(this)
+                        .attr('opacity', 0.1)
+                        .attr('r', d.radius)
+                        .style('filter', 'drop-shadow(0 0 2px rgba(255, 255, 255, 0.2))');
+                }
+            });
 
         let targetTypes = [selectedType1];
         if (selectedType1 === 'Parliament') {
             targetTypes = ['Parliament', 'Scottish Government and Parliament'];
         }
 
-        const nodesWithType1 = filteredData.filter(d =>
+        const allNodesWithType1 = filteredData.filter(d =>
             targetTypes.includes(d.type1)
         );
 
-        console.log(`Found ${nodesWithType1.length} nodes with type1: ${selectedType1}`);
+        // Filter to only include nodes that are currently visible
+        const nodesWithType1 = allNodesWithType1.filter(node => {
+            let isVisible = false;
+            svg.selectAll('.node').each(function (nodeData) {
+                if (nodeData.id === node.id) {
+                    const opacity = parseFloat(d3.select(this).attr('opacity') || 0);
+                    isVisible = opacity > 0;
+                }
+            });
+            return isVisible;
+        });
+
+        console.log(`Found ${allNodesWithType1.length} total nodes with type1: ${selectedType1}, ${nodesWithType1.length} currently visible`);
         console.log('Target types:', targetTypes);
 
         if (nodesWithType1.length === 0) {
@@ -569,11 +639,15 @@ document.addEventListener('DOMContentLoaded', function () {
         svg.selectAll('.node')
             .each(function (d) {
                 if (highlightedNodeIds.has(d.id)) {
-                    const isMainSelection = nodesWithType1.some(n => n.id === d.id);
-                    d3.select(this)
-                        .attr('opacity', 1)
-                        .attr('r', isMainSelection ? d.radius * 1.2 : d.radius)
-                        .style('filter', 'drop-shadow(0 0 12px rgba(255, 255, 255, 0.8))');
+                    // Only highlight if the node is currently visible (opacity > 0)
+                    const currentOpacity = parseFloat(d3.select(this).attr('opacity') || 0);
+                    if (currentOpacity > 0) {
+                        const isMainSelection = nodesWithType1.some(n => n.id === d.id);
+                        d3.select(this)
+                            .attr('opacity', 1)
+                            .attr('r', isMainSelection ? d.radius * 1.2 : d.radius)
+                            .style('filter', 'drop-shadow(0 0 12px rgba(255, 255, 255, 0.8))');
+                    }
                 }
             });
 
@@ -860,6 +934,12 @@ document.addEventListener('DOMContentLoaded', function () {
     function handleClick(event, d) {
         console.log('handleClick called for node:', d.id, 'event type:', event.type);
 
+        // Auto-pause timeline when node is clicked
+        if (timelinePlayer.isPlaying) {
+            pauseTimeline();
+            console.log('⏸️ Timeline auto-paused due to node click');
+        }
+
         // SVG dropdowns removed - no need to close them
         currentSelection = d;
         currentKeywordSelection = d;
@@ -870,9 +950,16 @@ document.addEventListener('DOMContentLoaded', function () {
         svg.selectAll('.click-indicator, .long-press-indicator').remove();
 
         svg.selectAll('.node')
-            .attr('opacity', 0.1)
-            .attr('r', d => d.radius)
-            .style('filter', 'drop-shadow(0 0 2px rgba(255, 255, 255, 0.2))');
+            .each(function (d) {
+                const currentOpacity = parseFloat(d3.select(this).attr('opacity') || 0);
+                if (currentOpacity > 0) {
+                    // Only dim nodes that are currently visible
+                    d3.select(this)
+                        .attr('opacity', 0.1)
+                        .attr('r', d.radius)
+                        .style('filter', 'drop-shadow(0 0 2px rgba(255, 255, 255, 0.2))');
+                }
+            });
 
         const targetElement = event.target;
         // Use the data's current position instead of DOM attributes for accuracy
@@ -920,7 +1007,19 @@ document.addEventListener('DOMContentLoaded', function () {
             const nodesWithKeyword = keywordIndex.get(keyword) || [];
             nodesWithKeyword.forEach(node => {
                 if (node.id !== d.id) {
-                    relatedNodeIds.add(node.id);
+                    // Only add nodes that are currently visible (not at opacity 0)
+                    const nodeElement = svg.select(`.node[data-id="${node.id}"]`);
+                    if (nodeElement.empty()) {
+                        // Try to find by checking all nodes
+                        svg.selectAll('.node').each(function (nodeData) {
+                            if (nodeData.id === node.id) {
+                                const currentOpacity = parseFloat(d3.select(this).attr('opacity') || 0);
+                                if (currentOpacity > 0) {
+                                    relatedNodeIds.add(node.id);
+                                }
+                            }
+                        });
+                    }
                 }
             });
         });
@@ -930,10 +1029,13 @@ document.addEventListener('DOMContentLoaded', function () {
             svg.selectAll('.node')
                 .each(function (nodeData) {
                     if (relatedNodeIds.has(nodeData.id)) {
-                        d3.select(this)
-                            .attr('opacity', 1)
-                            .attr('r', nodeData.radius)
-                            .style('filter', 'drop-shadow(0 0 12px rgba(255, 255, 255, 0.8))');
+                        const currentOpacity = parseFloat(d3.select(this).attr('opacity') || 0);
+                        if (currentOpacity > 0) { // Only highlight if node is visible
+                            d3.select(this)
+                                .attr('opacity', 1)
+                                .attr('r', nodeData.radius)
+                                .style('filter', 'drop-shadow(0 0 12px rgba(255, 255, 255, 0.8))');
+                        }
                     }
                 });
         }
@@ -1079,9 +1181,13 @@ document.addEventListener('DOMContentLoaded', function () {
             }
         }
 
-        html += `<div style="position: absolute; left: ${centerX - 6}px; top: ${centerY - 6}px;
-        width: 12px; height: 12px; background: ${centerColor}; border-radius: 50%;
-        border: 2px solid ${borderColor}; box-shadow: 0 0 8px ${shadowColor}; z-index: 2;"></div>`;
+        // Center element with outlined circle design
+        html += `<div style="position: absolute; left: ${centerX - 8}px; top: ${centerY - 8}px;
+        width: 16px; height: 16px; background: #000000; border-radius: 50%;
+        border: 2px solid #ffffff; z-index: 2;">
+            <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            width: 6px; height: 6px; background: #ffffff; border-radius: 50%;"></div>
+        </div>`;
 
         // 🔗 关键词按钮 - 椭圆形竖向分布
         keywords.forEach((keyword, index) => {
@@ -1136,6 +1242,7 @@ document.addEventListener('DOMContentLoaded', function () {
         const closeButton = document.getElementById('keyword-panel-close');
         if (closeButton) {
             closeButton.addEventListener('click', function (e) {
+                trackActivity(); // Track user activity
                 e.preventDefault();
                 e.stopPropagation();
                 console.log('Close button clicked - resetting visualization');
@@ -1147,8 +1254,15 @@ document.addEventListener('DOMContentLoaded', function () {
         panel.querySelectorAll('.keyword-clickable').forEach(element => {
             // Click event
             element.addEventListener('click', function () {
+                trackActivity(); // Track user activity
                 const keyword = this.getAttribute('data-keyword');
                 console.log('🔗 Keyword clicked:', keyword);
+
+                // Auto-pause timeline when keyword is clicked
+                if (timelinePlayer.isPlaying) {
+                    pauseTimeline();
+                    console.log('⏸️ Timeline auto-paused due to keyword click');
+                }
 
                 // Toggle selected state
                 const isSelected = this.classList.contains('selected');
@@ -1193,6 +1307,12 @@ document.addEventListener('DOMContentLoaded', function () {
                 const keyword = this.getAttribute('data-keyword');
                 console.log('🔗 Keyword touched:', keyword);
 
+                // Auto-pause timeline when keyword is touched
+                if (timelinePlayer.isPlaying) {
+                    pauseTimeline();
+                    console.log('⏸️ Timeline auto-paused due to keyword touch');
+                }
+
                 // Toggle selected state for touch
                 const isSelected = this.classList.contains('selected');
 
@@ -1236,17 +1356,36 @@ document.addEventListener('DOMContentLoaded', function () {
 
         svg.selectAll('.connection-line').remove();
 
-        // Dim all nodes
+        // Dim all visible nodes
         svg.selectAll('.node')
-            .attr('opacity', 0.1)
-            .attr('r', d => d.radius)
-            .style('filter', 'drop-shadow(0 0 2px rgba(255, 255, 255, 0.2))');
+            .each(function (d) {
+                const currentOpacity = parseFloat(d3.select(this).attr('opacity') || 0);
+                if (currentOpacity > 0) {
+                    // Only dim nodes that are currently visible
+                    d3.select(this)
+                        .attr('opacity', 0.1)
+                        .attr('r', d.radius)
+                        .style('filter', 'drop-shadow(0 0 2px rgba(255, 255, 255, 0.2))');
+                }
+            });
 
         // OPTIMIZATION: Use keywordIndex for O(1) lookup instead of filtering
         const trimmedKeyword = selectedKeyword.trim();
-        const nodesWithKeyword = keywordIndex.get(trimmedKeyword) || [];
+        const allNodesWithKeyword = keywordIndex.get(trimmedKeyword) || [];
 
-        console.log(`Found ${nodesWithKeyword.length} nodes with keyword: ${selectedKeyword}`);
+        // Filter to only include nodes that are currently visible
+        const nodesWithKeyword = allNodesWithKeyword.filter(node => {
+            let isVisible = false;
+            svg.selectAll('.node').each(function (nodeData) {
+                if (nodeData.id === node.id) {
+                    const opacity = parseFloat(d3.select(this).attr('opacity') || 0);
+                    isVisible = opacity > 0;
+                }
+            });
+            return isVisible;
+        });
+
+        console.log(`Found ${allNodesWithKeyword.length} total nodes with keyword: ${selectedKeyword}, ${nodesWithKeyword.length} currently visible`);
 
         if (nodesWithKeyword.length === 0) {
             console.warn('No nodes found with keyword:', selectedKeyword);
@@ -1281,23 +1420,43 @@ document.addEventListener('DOMContentLoaded', function () {
                 const node1 = nodesWithKeyword[i];
                 const node2 = nodesWithKeyword[j];
 
-                const midX = (node1.displayX + node2.displayX) / 2;
-                const midY = (node1.displayY + node2.displayY) / 2;
-                const offsetX = -(node2.displayY - node1.displayY) * 0.1;
-                const offsetY = (node2.displayX - node1.displayX) * 0.1;
+                // Check if both nodes are currently visible before drawing connection
+                let node1Visible = false;
+                let node2Visible = false;
 
-                const path = `M ${node1.displayX} ${node1.displayY} Q ${midX + offsetX} ${midY + offsetY} ${node2.displayX} ${node2.displayY}`;
+                svg.selectAll('.node').each(function (nodeData) {
+                    if (nodeData.id === node1.id) {
+                        const opacity = parseFloat(d3.select(this).attr('opacity') || 0);
+                        node1Visible = opacity > 0;
+                    }
+                    if (nodeData.id === node2.id) {
+                        const opacity = parseFloat(d3.select(this).attr('opacity') || 0);
+                        node2Visible = opacity > 0;
+                    }
+                });
 
-                connectionLinesGroup.append('path')
-                    .attr('d', path)
-                    .attr('class', 'connection-line highlighted')
-                    .style('stroke', lineColor)
-                    .style('opacity', lineOpacity)
-                    .style('stroke-width', lineWidth);
+                // Only draw connection if both nodes are visible
+                if (node1Visible && node2Visible) {
+                    const midX = (node1.displayX + node2.displayX) / 2;
+                    const midY = (node1.displayY + node2.displayY) / 2;
+                    const offsetX = -(node2.displayY - node1.displayY) * 0.1;
+                    const offsetY = (node2.displayX - node1.displayX) * 0.1;
 
-                connectionsDrawn++;
-                if (shouldLimitConnections && connectionsDrawn >= MAX_CONNECTIONS) {
-                    break;
+                    const path = `M ${node1.displayX} ${node1.displayY} Q ${midX + offsetX} ${midY + offsetY} ${node2.displayX} ${node2.displayY}`;
+
+                    connectionLinesGroup.append('path')
+                        .attr('d', path)
+                        .attr('class', 'connection-line highlighted')
+                        .attr('data-node1', node1.id)
+                        .attr('data-node2', node2.id)
+                        .style('stroke', lineColor)
+                        .style('opacity', lineOpacity)
+                        .style('stroke-width', lineWidth);
+
+                    connectionsDrawn++;
+                    if (shouldLimitConnections && connectionsDrawn >= MAX_CONNECTIONS) {
+                        break;
+                    }
                 }
             }
             if (shouldLimitConnections && connectionsDrawn >= MAX_CONNECTIONS) {
@@ -1315,11 +1474,15 @@ document.addEventListener('DOMContentLoaded', function () {
         svg.selectAll('.node')
             .each(function (d) {
                 if (highlightedNodeIds.has(d.id)) {
-                    d3.select(this)
-                        .attr('opacity', 1)
-                        .attr('r', d.radius)
-                        .style('filter', 'drop-shadow(0 0 12px rgba(255, 255, 255, 0.8))')
-                        .raise();
+                    // Only highlight if the node is currently visible (opacity > 0)
+                    const currentOpacity = parseFloat(d3.select(this).attr('opacity') || 0);
+                    if (currentOpacity > 0) {
+                        d3.select(this)
+                            .attr('opacity', 1)
+                            .attr('r', d.radius)
+                            .style('filter', 'drop-shadow(0 0 12px rgba(255, 255, 255, 0.8))')
+                            .raise();
+                    }
                 }
             });
 
@@ -1364,6 +1527,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
 function resetVisualization() {
     console.log('🔄 RESET called - checking if it should proceed...');
+    console.log('🔄 RESET called from:', arguments.callee.caller?.name || 'unknown');
 
     const now = Date.now();
     const lastNodeTime = window.lastNodeInteraction || 0;
@@ -1403,12 +1567,8 @@ function resetVisualization() {
 
         svg.selectAll('.connection-line').remove();
 
-        svg.selectAll('.node')
-            .transition()
-            .duration(300)
-            .attr('opacity', 0.8)
-            .attr('r', d => d.radius)
-            .style('filter', 'drop-shadow(0 0 4px rgba(255, 255, 255, 0.3))');
+        // Reset nodes to timeline-based visibility instead of making all visible
+        updateNodeOpacities();
 
         // SVG dropdown elements removed - using HTML dropdowns
     }
@@ -1456,9 +1616,17 @@ function initializeHTMLDropdowns() {
             dropdownItem.className = 'dropdown-item';
             dropdownItem.textContent = type1;
             dropdownItem.addEventListener('click', function (e) {
+                trackActivity(); // Track user activity
                 e.preventDefault();
                 e.stopPropagation();
                 console.log('Dropdown item clicked:', type1);
+
+                // Auto-pause timeline when dropdown item is clicked
+                if (timelinePlayer.isPlaying) {
+                    pauseTimeline();
+                    console.log('⏸️ Timeline auto-paused due to dropdown item click');
+                }
+
                 highlightType1(type1);
                 closeDropdown();
             });
@@ -1522,3 +1690,396 @@ function initializeHTMLDropdowns() {
         }
     });
 }
+
+// Timeline Player Functions
+function initializeTimelinePlayer() {
+    console.log('🎬 Initializing timeline player...');
+    console.log('FilteredData length:', filteredData ? filteredData.length : 'No data');
+
+    if (!filteredData || filteredData.length === 0) {
+        console.error('❌ No data available for timeline initialization');
+        return;
+    }
+
+    // Calculate date range from data
+    const firstDates = filteredData.map(d => parseUKDate(d.firstDateParsed)).filter(d => d);
+    const lastDates = filteredData.map(d => parseUKDate(d.lastDateParsed)).filter(d => d);
+
+    console.log('First dates found:', firstDates.length, 'Last dates found:', lastDates.length);
+    console.log('Sample first date:', firstDates[0], 'Sample last date:', lastDates[0]);
+
+    timelinePlayer.startDate = d3.min(firstDates);
+    timelinePlayer.endDate = d3.max(lastDates);
+
+    console.log('Timeline range:', timelinePlayer.startDate, 'to', timelinePlayer.endDate);
+
+    if (!timelinePlayer.startDate || !timelinePlayer.endDate) {
+        console.error('❌ Could not determine timeline date range');
+        return;
+    }
+
+    // Update timeline labels
+    updateTimelineLabels();
+
+    // Setup timeline controls
+    setupTimelineControls();
+
+    // Initialize timeline position to start
+    setTimelinePosition(0);
+
+    // Update node opacities based on current time
+    updateNodeOpacities();
+
+    // Update button icon to show initial state
+    updatePlayButtonIcon();
+
+    // Initialize idle timer
+    resetIdleTimer();
+
+    // Auto-start the animation if autoplay is enabled
+    if (timelinePlayer.autoplay) {
+        setTimeout(() => {
+            playTimeline();
+        }, 1000); // Start after 1 second delay
+    }
+
+    console.log('✅ Timeline player initialized');
+}
+
+function updateTimelineLabels() {
+    if (!timelinePlayer.startDate || !timelinePlayer.endDate) {
+        console.log('❌ Cannot update timeline labels - missing start or end date');
+        return;
+    }
+
+    const startLabel = document.getElementById('timeline-start-label');
+    const endLabel = document.getElementById('timeline-end-label');
+    const currentLabel = document.getElementById('timeline-current-label');
+
+    console.log('Timeline label elements found:', {
+        startLabel: !!startLabel,
+        endLabel: !!endLabel,
+        currentLabel: !!currentLabel
+    });
+
+    if (startLabel) {
+        const startText = formatDateForTimeline(timelinePlayer.startDate);
+        startLabel.textContent = startText;
+        console.log('Set start label to:', startText);
+    }
+
+    if (endLabel) {
+        const endText = formatDateForTimeline(timelinePlayer.endDate);
+        endLabel.textContent = endText;
+        console.log('Set end label to:', endText);
+    }
+
+    // Initialize current date to start date
+    if (!timelinePlayer.currentDate) {
+        timelinePlayer.currentDate = new Date(timelinePlayer.startDate);
+    }
+
+    updateCurrentDateLabel();
+}
+
+function formatDateForTimeline(date) {
+    if (!date) return 'Unknown';
+    const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
+        'July', 'August', 'September', 'October', 'November', 'December'];
+    return `${monthNames[date.getMonth()]} ${date.getFullYear()}`;
+}
+
+function updateCurrentDateLabel() {
+    const currentLabel = document.getElementById('timeline-current-label');
+    console.log('Updating current date label:', {
+        currentLabel: !!currentLabel,
+        currentDate: timelinePlayer.currentDate
+    });
+
+    if (currentLabel && timelinePlayer.currentDate) {
+        const currentText = formatDateForTimeline(timelinePlayer.currentDate);
+        currentLabel.textContent = currentText;
+        console.log('Set current label to:', currentText);
+    }
+}
+
+function setupTimelineControls() {
+    const playButton = document.getElementById('play-pause-btn');
+    const timelineHandle = document.getElementById('timeline-handle');
+    const timelineTrack = document.querySelector('.timeline-track');
+
+    console.log('Timeline control elements found:', {
+        playButton: !!playButton,
+        timelineHandle: !!timelineHandle,
+        timelineTrack: !!timelineTrack
+    });
+
+    // Play/Pause button
+    if (playButton) {
+        playButton.addEventListener('click', function () {
+            trackActivity(); // Track user activity
+            toggleTimelinePlayback();
+        });
+        console.log('✅ Play button event listener added');
+    } else {
+        console.error('❌ Play button not found');
+    }
+
+    // Timeline handle dragging
+    if (timelineHandle && timelineTrack) {
+        let isDragging = false;
+
+        // Mouse events
+        timelineHandle.addEventListener('mousedown', function (e) {
+            trackActivity(); // Track user activity
+            startDrag(e);
+        });
+        document.addEventListener('mousemove', drag);
+        document.addEventListener('mouseup', stopDrag);
+
+        // Touch events for mobile
+        timelineHandle.addEventListener('touchstart', function (e) {
+            trackActivity(); // Track user activity
+            startDragTouch(e);
+        }, { passive: false });
+        document.addEventListener('touchmove', dragTouch, { passive: false });
+        document.addEventListener('touchend', stopDragTouch, { passive: false });
+
+        // Click on track to jump to position
+        timelineTrack.addEventListener('click', function (e) {
+            trackActivity(); // Track user activity
+            jumpToPosition(e);
+        });
+
+        function startDrag(e) {
+            e.preventDefault();
+            isDragging = true;
+            console.log('🎯 Drag started');
+        }
+
+        function drag(e) {
+            if (!isDragging) return;
+            e.preventDefault();
+
+            const rect = timelineTrack.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const percentage = Math.max(0, Math.min(1, x / rect.width));
+
+            console.log('🎯 Dragging to:', percentage);
+            setTimelinePosition(percentage, true);
+        }
+
+        function stopDrag() {
+            if (isDragging) {
+                isDragging = false;
+                console.log('🎯 Drag ended');
+            }
+        }
+
+        function startDragTouch(e) {
+            e.preventDefault();
+            isDragging = true;
+            console.log('🎯 Touch drag started');
+        }
+
+        function dragTouch(e) {
+            if (!isDragging) return;
+            e.preventDefault();
+
+            const touch = e.touches[0];
+            const rect = timelineTrack.getBoundingClientRect();
+            const x = touch.clientX - rect.left;
+            const percentage = Math.max(0, Math.min(1, x / rect.width));
+
+            console.log('🎯 Touch dragging to:', percentage);
+            setTimelinePosition(percentage, true);
+        }
+
+        function stopDragTouch() {
+            if (isDragging) {
+                isDragging = false;
+                console.log('🎯 Touch drag ended');
+            }
+        }
+
+        function jumpToPosition(e) {
+            // Don't jump if we just finished dragging
+            if (isDragging) return;
+
+            const rect = timelineTrack.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const percentage = Math.max(0, Math.min(1, x / rect.width));
+
+            console.log('🎯 Jumping to:', percentage);
+            setTimelinePosition(percentage);
+        }
+    }
+}
+
+function setTimelinePosition(percentage, isDragging = false) {
+    timelinePlayer.currentTime = percentage;
+
+    // Calculate current date
+    if (timelinePlayer.startDate && timelinePlayer.endDate) {
+        const timeDiff = timelinePlayer.endDate - timelinePlayer.startDate;
+        timelinePlayer.currentDate = new Date(timelinePlayer.startDate.getTime() + (timeDiff * percentage));
+        updateCurrentDateLabel();
+    }
+
+    // Update handle position smoothly
+    const handle = document.getElementById('timeline-handle');
+    if (handle) {
+        if (isDragging) {
+            // Immediate update while dragging for responsiveness
+            handle.style.left = `${percentage * 100}%`;
+        } else {
+            // Smooth transition when not dragging
+            handle.style.transition = 'left 0.1s ease';
+            handle.style.left = `${percentage * 100}%`;
+        }
+    }
+
+    // Update node opacities
+    updateNodeOpacities();
+}
+
+function updatePlayButtonIcon() {
+    const playButton = document.getElementById('play-pause-btn');
+
+    if (playButton) {
+        playButton.classList.toggle('playing', timelinePlayer.isPlaying);
+
+        // Update button icon
+        const svg = playButton.querySelector('svg');
+        if (svg) {
+            if (timelinePlayer.isPlaying) {
+                // Pause icon (complete SVG)
+                svg.innerHTML = '<circle cx="15" cy="15" r="14.25" fill="#D9D9D9" stroke="white" stroke-width="1.5"/><rect x="11" y="9" width="2" height="12" rx="1" fill="black"/><rect x="17" y="9" width="2" height="12" rx="1" fill="black"/>';
+            } else {
+                // Play icon (complete SVG)
+                svg.innerHTML = '<path d="M22.5 14.134C23.1667 14.5189 23.1667 15.4811 22.5 15.866L12 21.9282C11.3333 22.3131 10.5 21.832 10.5 21.0622L10.5 8.93782C10.5 8.16802 11.3333 7.6869 12 8.0718L22.5 14.134Z" fill="white"/><circle cx="15" cy="15" r="14.25" stroke="white" stroke-width="1.5"/>';
+            }
+        }
+    }
+}
+
+function toggleTimelinePlayback() {
+    if (timelinePlayer.isPlaying) {
+        pauseTimeline();
+    } else {
+        playTimeline();
+    }
+}
+
+function playTimeline() {
+    timelinePlayer.isPlaying = true;
+    updatePlayButtonIcon();
+    animateTimeline();
+}
+
+function pauseTimeline() {
+    timelinePlayer.isPlaying = false;
+    updatePlayButtonIcon();
+    if (timelinePlayer.animationFrame) {
+        cancelAnimationFrame(timelinePlayer.animationFrame);
+        timelinePlayer.animationFrame = null;
+    }
+}
+
+function animateTimeline() {
+    if (!timelinePlayer.isPlaying) return;
+
+    timelinePlayer.currentTime += timelinePlayer.animationSpeed;
+
+    if (timelinePlayer.currentTime >= 1) {
+        if (timelinePlayer.loop) {
+            // Loop back to the beginning
+            timelinePlayer.currentTime = 0;
+            console.log('🔄 Timeline looping back to start');
+        } else {
+            // Stop at the end
+            timelinePlayer.currentTime = 1;
+            pauseTimeline();
+        }
+    }
+
+    setTimelinePosition(timelinePlayer.currentTime);
+
+    timelinePlayer.animationFrame = requestAnimationFrame(animateTimeline);
+}
+
+function updateNodeOpacities() {
+    if (!svg || !filteredData || !timelinePlayer.currentDate) return;
+
+    console.log('Updating node opacities for date:', timelinePlayer.currentDate.toISOString().split('T')[0]);
+
+    // Get all currently visible nodes
+    const visibleNodeIds = new Set();
+
+    svg.selectAll('.node')
+        .each(function (d) {
+            const firstDate = parseUKDate(d.firstDateParsed);
+            const lastDate = parseUKDate(d.lastDateParsed);
+
+            let opacity = 0;
+
+            if (firstDate && lastDate && timelinePlayer.currentDate) {
+                if (timelinePlayer.currentDate >= firstDate && timelinePlayer.currentDate <= lastDate) {
+                    opacity = 0.8;
+                    visibleNodeIds.add(d.id); // Track visible nodes
+                }
+            }
+
+            d3.select(this)
+                .transition()
+                .duration(200)
+                .attr('opacity', opacity)
+                .style('filter', null); // Clear any glow effects
+        });
+
+    // Only manage connection lines and check selections if we have an active selection
+    if (currentSelection || currentKeywordSelection || currentCategorySelection) {
+        // Update connection line opacities based on node visibility
+        svg.selectAll('.connection-line').each(function () {
+            const line = d3.select(this);
+            const node1Id = line.attr('data-node1');
+            const node2Id = line.attr('data-node2');
+
+            // Calculate line opacity based on connected nodes' visibility
+            const node1Visible = visibleNodeIds.has(node1Id);
+            const node2Visible = visibleNodeIds.has(node2Id);
+
+            if (node1Visible && node2Visible) {
+                // Both nodes visible - show line at full opacity
+                line.transition().duration(200).style('opacity', 0.6);
+            } else if (node1Visible || node2Visible) {
+                // One node visible - show line at reduced opacity
+                line.transition().duration(200).style('opacity', 0.3);
+            } else {
+                // Neither node visible - fade out line
+                line.transition().duration(200).style('opacity', 0);
+            }
+        });
+    }
+
+    // Note: Selection reset logic removed from updateNodeOpacities
+    // Selections should only be reset by explicit user actions, not during timeline animation
+}
+
+// Debug function to manually test timeline
+window.testTimeline = function () {
+    console.log('🧪 Testing timeline manually...');
+    console.log('FilteredData available:', !!filteredData);
+    console.log('FilteredData length:', filteredData ? filteredData.length : 0);
+
+    if (filteredData && filteredData.length > 0) {
+        console.log('Sample data:', filteredData[0]);
+        console.log('First date parsed:', filteredData[0].firstDateParsed);
+        console.log('Last date parsed:', filteredData[0].lastDateParsed);
+
+        // Try to initialize timeline
+        initializeTimelinePlayer();
+    } else {
+        console.error('No data available for timeline test');
+    }
+};

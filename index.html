@@ -133,10 +133,10 @@
             #keyword-panel {
                 top: 100px;
                 width: 555px;
-                margin-top: 40px;
                 height: 791px !important;
                 right: 10px;
                 overflow: visible;
+                margin-top: 100px
             }
 
 
@@ -192,7 +192,7 @@
 
             .visualization-container {
                 position: fixed;
-                top: 40px;
+                top: 120px;
                 left: 50%;
                 transform: translateX(-50%);
                 display: flex;
@@ -210,6 +210,7 @@
                 display: flex;
                 gap: 40px;
                 margin-bottom: 20px;
+                margin-top: 10px;
             }
 
             .category-wrapper {
@@ -376,13 +377,224 @@
                     font-size: 20px;
                 }
             }
+
+            /* Timeline Player Styles */
+            .timeline-player {
+                /* position: fixed;
+                top: 0;
+                left: 0;
+                right: 0; */
+                width: 98%;
+                z-index: 2000;
+                background: rgba(0, 0, 0, 1);
+                padding: 20px 0px;
+                padding-left: 1%;
+                backdrop-filter: blur(10px);
+            }
+
+            .timeline-container {
+                position: relative;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+            }
+
+            .timeline-track {
+                position: relative;
+                width: 100%;
+                height: 30px;
+                display: flex;
+                align-items: center;
+                cursor: pointer;
+            }
+
+            .timeline-line {
+                width: 100%;
+                height: 2px;
+                background: #ffffff;
+                position: absolute;
+                top: 50%;
+                transform: translateY(-50%);
+            }
+
+            .timeline-start-marker,
+            .timeline-end-marker {
+                position: absolute;
+                width: 2px;
+                height: 24px;
+                background: #ffffff;
+                top: 50%;
+                transform: translateY(-50%);
+            }
+
+            .timeline-start-marker {
+                left: 0;
+            }
+
+            .timeline-end-marker {
+                right: 0;
+            }
+
+            .timeline-handle {
+                position: absolute;
+                top: 50%;
+                left: 0%;
+                transform: translate(-50%, -50%);
+                width: 34px;
+                height: 34px;
+                cursor: grab;
+                z-index: 10;
+            }
+
+            .timeline-handle:active {
+                cursor: grabbing;
+            }
+
+            .timeline-handle-inner {
+                width: 100%;
+                height: 100%;
+                background: #000000;
+                border: 2px solid #ffffff;
+                border-radius: 50%;
+                position: relative;
+            }
+
+            .timeline-handle-inner::after {
+                content: '';
+                position: absolute;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                width: 18px;
+                height: 18px;
+                background: #ffffff;
+                border-radius: 50%;
+            }
+
+            .timeline-labels {
+                display: flex;
+                justify-content: space-between;
+                width: 100%;
+                position: relative;
+                margin-top: 5px;
+            }
+
+            .timeline-start-label,
+            .timeline-end-label {
+                color: #FFF;
+                font-family: "Neue Haas Grotesk Display Pro";
+                font-size: 20px;
+                font-style: normal;
+                font-weight: 500;
+                line-height: normal;
+            }
+
+            .timeline-current-label {
+
+                transform: translateX(-50%);
+                color: #FFF;
+                font-family: "Neue Haas Grotesk Display Pro";
+                font-size: 20px;
+                font-style: normal;
+                font-weight: 600;
+                line-height: normal;
+                white-space: nowrap;
+            }
+
+            .timeline-controls {
+                display: flex;
+                align-items: center;
+                justify-content: center;
+
+            }
+
+            .play-button {
+                width: 42px;
+                height: 42px;
+                background: transparent;
+                border: none;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                cursor: pointer;
+                transition: transform 0.2s ease;
+            }
+
+            .play-button:hover {
+                transform: scale(1.05);
+            }
+
+            .play-button.playing {
+                /* SVG handles all styling */
+            }
+
+            .play-button svg {
+                margin-left: 2px;
+                /* Slight offset to center the triangle */
+            }
+
+            /* Responsive adjustments */
+            @media (orientation: portrait) {
+                .timeline-player {
+                    padding: 15px 20px;
+                }
+
+                .timeline-current-label {
+                    font-size: 12px;
+                    top: -20px;
+                }
+
+                .timeline-start-label,
+                .timeline-end-label {
+                    font-size: 12px;
+                }
+
+                .play-button {
+                    width: 38px;
+                    height: 38px;
+                }
+
+                .visualization-container {
+                    top: 100px;
+                }
+            }
         </style>
     </head>
 
     <body>
-        <div class="container"></div>
         <div>
             <div id="keyword-panel" class="floating-panel">
+            </div>
+        </div>
+
+        <!-- Timeline Player -->
+        <div id="timeline-player" class="timeline-player">
+            <div class="timeline-container">
+                <div class="timeline-controls">
+                    <div class="timeline-current-label" id="timeline-current-label"></div>
+                    <button id="play-pause-btn" class="play-button">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="42" height="42" viewBox="0 0 30 30" fill="none">
+                            <path
+                                d="M22.5 14.134C23.1667 14.5189 23.1667 15.4811 22.5 15.866L12 21.9282C11.3333 22.3131 10.5 21.832 10.5 21.0622L10.5 8.93782C10.5 8.16802 11.3333 7.6869 12 8.0718L22.5 14.134Z"
+                                fill="white" />
+                            <circle cx="15" cy="15" r="14.25" stroke="white" stroke-width="1.5" />
+                        </svg>
+                    </button>
+                </div>
+                <div class="timeline-track">
+                    <div class="timeline-line"></div>
+                    <div class="timeline-start-marker"></div>
+                    <div class="timeline-end-marker"></div>
+                    <div class="timeline-handle" id="timeline-handle">
+                        <div class="timeline-handle-inner"></div>
+                    </div>
+                </div>
+                <div class="timeline-labels">
+                    <div class="timeline-start-label" id="timeline-start-label"></div>
+                    <div class="timeline-end-label" id="timeline-end-label"></div>
+
+                </div>
+
             </div>
         </div>
         <div>
