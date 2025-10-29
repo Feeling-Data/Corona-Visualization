@@ -122,43 +122,32 @@ const type1GroupMap = {
     'Transport': 'Government',
     'Community': 'Government',
 
-    'Health': 'Knowledge',
-    'Health and Social Care': 'Knowledge',
-    'Education': 'Knowledge',
-    'School': 'Knowledge',
-    'School, Primary': 'Knowledge',
-    'School, Secondary': 'Knowledge',
-    'School, ASL': 'Knowledge',
-    'School, Independent': 'Knowledge',
-    'Libraries and Archives': 'Knowledge',
-    'Research': 'Knowledge',
-    'Science': 'Knowledge',
-    'Think Tank': 'Knowledge',
-    'History': 'Knowledge',
-    'Heritage': 'Knowledge',
+    'Health': 'Education',
+    'Health and Social Care': 'Education',
+    'Education': 'Education',
+    'School': 'Education',
+    'School, Primary': 'Education',
+    'School, Secondary': 'Education',
+    'School, ASL': 'Education',
+    'School, Independent': 'Education',
+    'Libraries and Archives': 'Education',
+    'Research': 'Education',
+    'Science': 'Education',
+    'Think Tank': 'Education',
+    'History': 'Education',
+    'Heritage': 'Education',
 
     'Sports': 'Media',
     'News': 'Media',
     'Media': 'Media',
     'Blog': 'Media',
-    'Heritage and Tourism': 'Media',
-    'Business': 'Media',
-    'Retail': 'Media',
-    'Food and Drink': 'Media',
-    'Oil': 'Media',
-    'Timber': 'Media',
-    'Voluntary': 'Media',
-    'Charity': 'Government',
-    'Nature': 'Media',
-    'Wildlife': 'Media',
-    'Church and religion': 'Government',
-    'Religion': 'Media'
+    'Heritage and Tourism': 'Media'
 };
 
 const groupOrder = [
     'Media',
     'Entertainment',
-    'Knowledge',
+    'Education',
     'Government'
 ];
 
@@ -198,10 +187,10 @@ document.addEventListener('DOMContentLoaded', function () {
     if (isPortrait) {
         // For portrait, use most of the available height and full width
         width = viewportWidth; // Use full viewport width
-        height = viewportHeight * 0.9; // Use 90% of viewport height
+        height = viewportHeight * 0.95; // Use 95% of viewport height (increased from 90%)
     } else {
         // For landscape, use most of the available height and full width
-        height = viewportHeight * 0.9; // Use 90% of viewport height
+        height = viewportHeight * 0.95; // Use 95% of viewport height (increased from 90%)
         width = viewportWidth; // Use full viewport width
     }
 
@@ -214,7 +203,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // With 100% width, we need to handle padding differently
     const actualWidth = width; // Use the full calculated width
-    const actualHeight = height + 300; // Increased to accommodate more data
+    const actualHeight = height + 500; // Increased to accommodate more data (was 300)
 
     svg = container.append('svg')
         .attr('width', '100%')
@@ -260,7 +249,7 @@ document.addEventListener('DOMContentLoaded', function () {
     // Scroll setup removed - no longer needed for responsive design
 
     function loadData() {
-        d3.csv('final_data.csv').then(function (rawData) {
+        d3.csv('final_covid_data.csv').then(function (rawData) {
             processData(rawData);
         }).catch(function (error) {
             console.error("Error loading data:", error);
@@ -352,8 +341,8 @@ document.addEventListener('DOMContentLoaded', function () {
                 d.id = +d.id;
             }
 
-            // Use preprocessed keywords (keywords_processed field)
-            d.keywords = d.keywords_processed ? d.keywords_processed.split(',').map(k => k.trim()).filter(k => k.length > 0) : [];
+            // Use first_keywords_auto field
+            d.keywords = d.first_keywords_auto ? d.first_keywords_auto.split(',').map(k => k.trim()).filter(k => k.length > 0) : [];
 
             // Group is already set by preprocessing script, but fallback if missing
             if (!d.group) {
@@ -424,8 +413,8 @@ document.addEventListener('DOMContentLoaded', function () {
         console.log('Node density by month:', monthCounts);
 
         // Create a custom Y positioning that starts at top and spreads dense periods
-        const yStart = -320; // Start near top
-        const yEnd = margin.top + availableHeight - 15; // End near bottom
+        const yStart = -500; // Start higher up (was -320)
+        const yEnd = margin.top + availableHeight + 400; // End lower down (was -15)
         const totalHeight = yEnd - yStart;
 
         // Sort all data by date and assign sequential Y positions
@@ -1091,7 +1080,13 @@ document.addEventListener('DOMContentLoaded', function () {
         <div style="margin-bottom: 15px; border-bottom: 1px solid #444; padding-bottom: 10px;">
             <div style="margin-bottom: 8px;">
                 <div style="color: #FFF; font-family: 'Neue Haas Grotesk Display Pro'; font-size: 18px; font-style: normal; font-weight: 500; line-height: normal; text-transform: uppercase; margin-bottom: 2px;">TITLE</div>
-                <div style="color: #FFF; font-family: 'Neue Haas Grotesk Display Pro'; font-size: 35px; font-style: normal; font-weight: 700; line-height: normal;">${articleData ? (articleData.title || 'N/A') : 'N/A'}</div>
+                <div style="color: #FFF; font-family: 'Neue Haas Grotesk Display Pro'; font-size: 35px; font-style: normal; font-weight: 700; line-height: normal;">
+                    ${articleData ? (articleData.title || 'N/A') : 'N/A'}${articleData && articleData['COVID (add yes/ no)'] && articleData['COVID (add yes/ no)'].toLowerCase() === 'no' ?
+                '<span id="covid-info-icon" style="color: #ffffff; font-size: 20px; border: 1px solid #ffffff; border-radius: 50%; width: 32px; height: 32px; display: inline-flex; align-items: center; justify-content: center; margin-left: 10px; vertical-align: text-bottom; cursor: pointer;" title="Non-COVID Related">!</span>' : ''}
+                </div>
+                <div style="color: #FFF; font-family: 'Neue Haas Grotesk Display Pro'; font-size: 15px; font-style: normal; font-weight: 500; line-height: normal; margin-top: 8px; word-break: break-all;">
+                    ${articleData ? (articleData.url || 'N/A') : 'N/A'}
+                </div>
             </div>
             <div style="display: flex; justify-content: space-between; margin-top: 8px;">
                 <div style="flex: 1;">
@@ -1227,7 +1222,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 background: #000000; border: 1px solid #FFFFFF; border-radius: 15px;
                 padding: 4px 16px; color: #FFF; text-align: center;
                 font-family: 'Neue Haas Grotesk Display Pro'; font-size: 18px; font-style: normal; font-weight: 500; line-height: normal;
-                cursor: pointer; user-select: none; z-index: 3; transition: all 0.2s ease;
+                cursor: pointer; user-select: none; z-index: 3;
                 white-space: nowrap;"
                 data-keyword="${keyword}" class="keyword-clickable"
                 title="${keyword}">
@@ -1247,6 +1242,46 @@ document.addEventListener('DOMContentLoaded', function () {
                 e.stopPropagation();
                 console.log('Close button clicked - resetting visualization');
                 resetVisualization();
+            });
+        }
+
+        // Add COVID info icon click handler
+        const covidInfoIcon = document.getElementById('covid-info-icon');
+        if (covidInfoIcon) {
+            covidInfoIcon.addEventListener('click', function (e) {
+                e.preventDefault();
+                e.stopPropagation();
+
+                // Create and show tooltip
+                const tooltip = document.createElement('div');
+                tooltip.style.cssText = `
+                    position: absolute;
+                    background: #000;
+                    color: #fff;
+                    padding: 10px 15px;
+                    border: 1px solid #fff;
+                    border-radius: 5px;
+                    font-family: 'Neue Haas Grotesk Display Pro';
+                    font-size: 14px;
+                    z-index: 1000;
+                    pointer-events: none;
+                    white-space: nowrap;
+                `;
+                tooltip.textContent = 'This site may no longer be related to COVID-19.';
+
+                // Position tooltip near the icon
+                const rect = covidInfoIcon.getBoundingClientRect();
+                tooltip.style.left = (rect.left + rect.width + 10) + 'px';
+                tooltip.style.top = (rect.top - 5) + 'px';
+
+                document.body.appendChild(tooltip);
+
+                // Remove tooltip after 3 seconds
+                setTimeout(() => {
+                    if (tooltip.parentNode) {
+                        tooltip.parentNode.removeChild(tooltip);
+                    }
+                }, 3000);
             });
         }
 
@@ -1286,20 +1321,7 @@ document.addEventListener('DOMContentLoaded', function () {
                 highlightKeyword(keyword);
             });
 
-            // Hover events
-            element.addEventListener('mouseenter', function () {
-                if (!this.classList.contains('selected')) {
-                    this.style.background = '#333333';
-                }
-                this.style.transform = 'translate(-50%, -50%) scale(1.05)';
-            });
-
-            element.addEventListener('mouseleave', function () {
-                if (!this.classList.contains('selected')) {
-                    this.style.background = '#000000';
-                }
-                this.style.transform = 'translate(-50%, -50%) scale(1)';
-            });
+            // Hover events removed - no animation on keyword pills
 
             // Touch event
             element.addEventListener('touchend', function (e) {
