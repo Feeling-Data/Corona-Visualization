@@ -2,6 +2,7 @@ let svg, xScale, yScale, colorScale, allData, filteredData;
 let currentSelection = null;
 let currentKeywordSelection = null;
 let currentCategorySelection = null; // Track current category filter selection
+let currentSelectedKeyword = null; // Track the currently selected keyword string
 let legendExpanded = {};
 let nodeMap = new Map(); // OPTIMIZATION: Fast O(1) node lookup by ID
 let keywordIndex = new Map(); // OPTIMIZATION: Fast keyword-to-nodes lookup
@@ -938,14 +939,16 @@ document.addEventListener('DOMContentLoaded', function () {
 
         svg.selectAll('.click-indicator, .long-press-indicator').remove();
 
+        // Interrupt any ongoing transitions and dim all visible nodes
         svg.selectAll('.node')
-            .each(function (d) {
+            .interrupt() // Stop any ongoing transitions
+            .each(function (nodeData) {
                 const currentOpacity = parseFloat(d3.select(this).attr('opacity') || 0);
                 if (currentOpacity > 0) {
                     // Only dim nodes that are currently visible
                     d3.select(this)
                         .attr('opacity', 0.1)
-                        .attr('r', d.radius)
+                        .attr('r', nodeData.radius)
                         .style('filter', 'drop-shadow(0 0 2px rgba(255, 255, 255, 0.2))');
                 }
             });
@@ -984,11 +987,13 @@ document.addEventListener('DOMContentLoaded', function () {
             .attr('dur', '6s')
             .attr('repeatCount', 'indefinite');
 
-        // Highlight current selected node
+        // Highlight current selected node (interrupt any transitions first)
         d3.select(targetElement)
+            .interrupt() // Stop any ongoing transitions
             .attr('opacity', 1)
-            .attr('r', d => d.radius)
-            .style('filter', 'drop-shadow(0 0 12px rgba(255, 255, 255, 0.8))');
+            .attr('r', d.radius)
+            .style('filter', 'drop-shadow(0 0 12px rgba(255, 255, 255, 0.8))')
+            .raise();
 
         // OPTIMIZATION: Handle related nodes highlighting using keywordIndex
         const relatedNodeIds = new Set();
@@ -1021,9 +1026,11 @@ document.addEventListener('DOMContentLoaded', function () {
                         const currentOpacity = parseFloat(d3.select(this).attr('opacity') || 0);
                         if (currentOpacity > 0) { // Only highlight if node is visible
                             d3.select(this)
+                                .interrupt() // Stop any ongoing transitions
                                 .attr('opacity', 1)
                                 .attr('r', nodeData.radius)
-                                .style('filter', 'drop-shadow(0 0 12px rgba(255, 255, 255, 0.8))');
+                                .style('filter', 'drop-shadow(0 0 12px rgba(255, 255, 255, 0.8))')
+                                .raise();
                         }
                     }
                 });
@@ -1376,6 +1383,9 @@ document.addEventListener('DOMContentLoaded', function () {
             return;
         }
 
+        // Store the selected keyword globally
+        currentSelectedKeyword = selectedKeyword;
+
         svg.selectAll('.connection-line').remove();
 
         // Dim all visible nodes
@@ -1395,19 +1405,11 @@ document.addEventListener('DOMContentLoaded', function () {
         const trimmedKeyword = selectedKeyword.trim();
         const allNodesWithKeyword = keywordIndex.get(trimmedKeyword) || [];
 
-        // Filter to only include nodes that are currently visible
-        const nodesWithKeyword = allNodesWithKeyword.filter(node => {
-            let isVisible = false;
-            svg.selectAll('.node').each(function (nodeData) {
-                if (nodeData.id === node.id) {
-                    const opacity = parseFloat(d3.select(this).attr('opacity') || 0);
-                    isVisible = opacity > 0;
-                }
-            });
-            return isVisible;
-        });
+        // Use ALL nodes with keyword, not just currently visible ones
+        // This ensures connection lines persist during animation
+        const nodesWithKeyword = allNodesWithKeyword;
 
-        console.log(`Found ${allNodesWithKeyword.length} total nodes with keyword: ${selectedKeyword}, ${nodesWithKeyword.length} currently visible`);
+        console.log(`Found ${allNodesWithKeyword.length} total nodes with keyword: ${selectedKeyword}`);
 
         if (nodesWithKeyword.length === 0) {
             console.warn('No nodes found with keyword:', selectedKeyword);
@@ -1431,7 +1433,8 @@ document.addEventListener('DOMContentLoaded', function () {
         let connectionsDrawn = 0;
         const samplingRate = shouldLimitConnections ? MAX_CONNECTIONS / totalPossibleConnections : 1;
 
-        // Draw connection lines (with optional limiting for performance)
+        // Draw connection lines for ALL nodes (not just currently visible ones)
+        // Visibility will be managed by updateNodeOpacities() during animation
         for (let i = 0; i < nodesWithKeyword.length; i++) {
             for (let j = i + 1; j < nodesWithKeyword.length; j++) {
                 // OPTIMIZATION: Sample connections for very popular keywords
@@ -1442,49 +1445,34 @@ document.addEventListener('DOMContentLoaded', function () {
                 const node1 = nodesWithKeyword[i];
                 const node2 = nodesWithKeyword[j];
 
-                // Check if both nodes are currently visible before drawing connection
-                let node1Visible = false;
-                let node2Visible = false;
+                const midX = (node1.displayX + node2.displayX) / 2;
+                const midY = (node1.displayY + node2.displayY) / 2;
+                const offsetX = -(node2.displayY - node1.displayY) * 0.1;
+                const offsetY = (node2.displayX - node1.displayX) * 0.1;
 
-                svg.selectAll('.node').each(function (nodeData) {
-                    if (nodeData.id === node1.id) {
-                        const opacity = parseFloat(d3.select(this).attr('opacity') || 0);
-                        node1Visible = opacity > 0;
-                    }
-                    if (nodeData.id === node2.id) {
-                        const opacity = parseFloat(d3.select(this).attr('opacity') || 0);
-                        node2Visible = opacity > 0;
-                    }
-                });
+                const path = `M ${node1.displayX} ${node1.displayY} Q ${midX + offsetX} ${midY + offsetY} ${node2.displayX} ${node2.displayY}`;
 
-                // Only draw connection if both nodes are visible
-                if (node1Visible && node2Visible) {
-                    const midX = (node1.displayX + node2.displayX) / 2;
-                    const midY = (node1.displayY + node2.displayY) / 2;
-                    const offsetX = -(node2.displayY - node1.displayY) * 0.1;
-                    const offsetY = (node2.displayX - node1.displayX) * 0.1;
+                connectionLinesGroup.append('path')
+                    .attr('d', path)
+                    .attr('class', 'connection-line highlighted')
+                    .attr('data-node1', node1.id)
+                    .attr('data-node2', node2.id)
+                    .style('stroke', lineColor)
+                    .style('opacity', 0) // Start hidden - updateNodeOpacities will show them
+                    .style('stroke-width', lineWidth);
 
-                    const path = `M ${node1.displayX} ${node1.displayY} Q ${midX + offsetX} ${midY + offsetY} ${node2.displayX} ${node2.displayY}`;
-
-                    connectionLinesGroup.append('path')
-                        .attr('d', path)
-                        .attr('class', 'connection-line highlighted')
-                        .attr('data-node1', node1.id)
-                        .attr('data-node2', node2.id)
-                        .style('stroke', lineColor)
-                        .style('opacity', lineOpacity)
-                        .style('stroke-width', lineWidth);
-
-                    connectionsDrawn++;
-                    if (shouldLimitConnections && connectionsDrawn >= MAX_CONNECTIONS) {
-                        break;
-                    }
+                connectionsDrawn++;
+                if (shouldLimitConnections && connectionsDrawn >= MAX_CONNECTIONS) {
+                    break;
                 }
             }
             if (shouldLimitConnections && connectionsDrawn >= MAX_CONNECTIONS) {
                 break;
             }
         }
+
+        // Update connection line visibilities immediately based on current node states
+        updateConnectionLineVisibilities();
 
         // OPTIMIZATION: Use a Set for O(1) lookup when filtering nodes
         const highlightedNodeIds = new Set(nodesWithKeyword.map(n => n.id));
@@ -1570,6 +1558,7 @@ function resetVisualization() {
     currentSelection = null;
     currentKeywordSelection = null;
     currentCategorySelection = null;
+    currentSelectedKeyword = null;
 
     Object.keys(legendExpanded).forEach(key => {
         legendExpanded[key] = false;
@@ -2018,6 +2007,52 @@ function animateTimeline() {
             // Loop back to the beginning
             timelinePlayer.currentTime = 0;
             console.log('🔄 Timeline looping back to start');
+
+            // Clear all selections when animation restarts
+            currentSelection = null;
+            currentKeywordSelection = null;
+            currentCategorySelection = null;
+            currentSelectedKeyword = null;
+
+            console.log('🧹 Selection variables cleared:', {
+                currentSelection,
+                currentKeywordSelection,
+                currentCategorySelection,
+                currentSelectedKeyword
+            });
+
+            // Hide all selected tags
+            if (window.hideAllSelectedTags) {
+                window.hideAllSelectedTags();
+            }
+
+            // Remove connection lines and all visual indicators
+            if (svg) {
+                svg.selectAll('.connection-line').remove();
+                svg.selectAll('.long-press-indicator, .click-indicator').remove();
+
+                // Immediately interrupt all transitions and reset node styles to normal state
+                svg.selectAll('.node')
+                    .interrupt()
+                    .style('filter', null)
+                    .attr('r', d => d.radius)
+                    .attr('opacity', 0); // Reset to 0 first, will be updated by updateNodeOpacities
+            }
+
+            // Close keyword panel
+            const keywordPanel = document.getElementById('keyword-panel');
+            if (keywordPanel) {
+                keywordPanel.style.display = 'none';
+                keywordPanel.innerHTML = '';
+            }
+
+            // Remove panel-open class
+            const visualizationContainer = document.getElementById('visualization-container');
+            if (visualizationContainer) {
+                visualizationContainer.classList.remove('panel-open');
+            }
+
+            console.log('🧹 Cleared all selections on animation restart');
         } else {
             // Stop at the end
             timelinePlayer.currentTime = 1;
@@ -2025,9 +2060,120 @@ function animateTimeline() {
         }
     }
 
+    // Update timeline position (this updates currentDate and calls updateNodeOpacities)
     setTimelinePosition(timelinePlayer.currentTime);
 
+    // Force an additional update after setTimelinePosition to ensure cleared selections are reflected
+    // (setTimelinePosition already calls updateNodeOpacities, but this ensures it happens with correct date)
+    if (timelinePlayer.currentTime === 0 && svg && filteredData && timelinePlayer.currentDate) {
+        // Double-check that selections are cleared by explicitly calling updateNodeOpacities
+        // The hasActiveSelection check should now be false since all variables are null
+        updateNodeOpacities();
+    }
+
     timelinePlayer.animationFrame = requestAnimationFrame(animateTimeline);
+}
+
+function getHighlightedNodeIds() {
+    const highlightedNodeIds = new Set();
+
+    // HIERARCHY: Keyword selection (highest priority)
+    // If a keyword is selected, highlight nodes with that keyword
+    if (currentSelectedKeyword && keywordIndex.has(currentSelectedKeyword.trim())) {
+        const nodesWithKeyword = keywordIndex.get(currentSelectedKeyword.trim()) || [];
+        nodesWithKeyword.forEach(node => highlightedNodeIds.add(node.id));
+
+        // Also include the originally clicked node if there was one
+        if (currentKeywordSelection) {
+            highlightedNodeIds.add(currentKeywordSelection.id);
+        }
+    }
+    // HIERARCHY: Single node selected (no keyword) - only if no keyword is selected
+    else if ((currentKeywordSelection || currentSelection) && !currentSelectedKeyword) {
+        const selectedNode = currentKeywordSelection || currentSelection;
+        if (selectedNode && selectedNode.keywords) {
+            // Include the clicked node itself
+            highlightedNodeIds.add(selectedNode.id);
+
+            // Include all nodes that share any keyword with the selected node
+            selectedNode.keywords.forEach(keyword => {
+                const trimmedKeyword = keyword.trim();
+                if (keywordIndex.has(trimmedKeyword)) {
+                    const nodesWithKeyword = keywordIndex.get(trimmedKeyword) || [];
+                    nodesWithKeyword.forEach(node => highlightedNodeIds.add(node.id));
+                }
+            });
+        }
+    }
+
+    // Get nodes from category selection (independent of keyword/node selection)
+    if (currentCategorySelection && currentCategorySelection.type1) {
+        const selectedType1 = currentCategorySelection.type1;
+        let targetTypes = [selectedType1];
+        if (selectedType1 === 'Parliament') {
+            targetTypes = ['Parliament', 'Scottish Government and Parliament'];
+        }
+
+        filteredData.forEach(node => {
+            if (targetTypes.includes(node.type1)) {
+                highlightedNodeIds.add(node.id);
+            }
+        });
+    }
+
+    return highlightedNodeIds;
+}
+
+function updateConnectionLineVisibilities() {
+    if (!svg || !filteredData || !timelinePlayer.currentDate) return;
+
+    // Get all currently visible nodes by checking date ranges directly (more reliable than DOM opacity)
+    // Store both string and number versions of IDs for reliable matching
+    const visibleNodeIds = new Set();
+
+    filteredData.forEach(node => {
+        const firstDate = parseUKDate(node.firstDateParsed);
+        const lastDate = parseUKDate(node.lastDateParsed);
+
+        if (firstDate && lastDate && timelinePlayer.currentDate) {
+            if (timelinePlayer.currentDate >= firstDate && timelinePlayer.currentDate <= lastDate) {
+                // Node is within the current date range - it should be visible
+                // Store both string and number versions for reliable matching
+                const nodeId = String(node.id);
+                visibleNodeIds.add(nodeId);
+                // Also add as number if it's a valid number
+                const numId = Number(nodeId);
+                if (!isNaN(numId)) {
+                    visibleNodeIds.add(numId);
+                }
+            }
+        }
+    });
+
+    // Update connection line opacities based on node visibility
+    svg.selectAll('.connection-line').each(function () {
+        const line = d3.select(this);
+        const node1Id = line.attr('data-node1');
+        const node2Id = line.attr('data-node2');
+
+        // Try both string and number versions for matching
+        const node1IdStr = String(node1Id);
+        const node2IdStr = String(node2Id);
+        const node1IdNum = Number(node1Id);
+        const node2IdNum = Number(node2Id);
+
+        // Check if nodes are visible (both must be visible for line to show)
+        const node1Visible = visibleNodeIds.has(node1IdStr) || (!isNaN(node1IdNum) && visibleNodeIds.has(node1IdNum));
+        const node2Visible = visibleNodeIds.has(node2IdStr) || (!isNaN(node2IdNum) && visibleNodeIds.has(node2IdNum));
+
+        if (node1Visible && node2Visible) {
+            // Both nodes visible - show line at full opacity
+            line.transition().duration(200).style('opacity', 0.5);
+        } else {
+            // One or both nodes invisible - hide line completely
+            line.transition().duration(200).style('opacity', 0);
+        }
+    });
 }
 
 function updateNodeOpacities() {
@@ -2035,57 +2181,184 @@ function updateNodeOpacities() {
 
     console.log('Updating node opacities for date:', timelinePlayer.currentDate.toISOString().split('T')[0]);
 
-    // Get all currently visible nodes
+    // Check if we have an active selection (respecting hierarchy)
+    // Priority: keyword > single node > category > nothing
+    const hasActiveSelection = currentSelectedKeyword ||
+                                (currentSelection || currentKeywordSelection) ||
+                                currentCategorySelection;
+
+    // Debug log when animation restarts to verify selections are cleared
+    if (timelinePlayer.currentTime === 0 && !hasActiveSelection) {
+        console.log('✅ No active selection detected - all nodes will show normally');
+    }
+
+    // Get all currently visible nodes and highlighted nodes
     const visibleNodeIds = new Set();
 
+    // First pass: determine which nodes are visible
+    svg.selectAll('.node')
+        .each(function (d) {
+            const firstDate = parseUKDate(d.firstDateParsed);
+            const lastDate = parseUKDate(d.lastDateParsed);
+
+            if (firstDate && lastDate && timelinePlayer.currentDate) {
+                if (timelinePlayer.currentDate >= firstDate && timelinePlayer.currentDate <= lastDate) {
+                    // Normalize ID to string for consistent comparison
+                    visibleNodeIds.add(String(d.id)); // Track visible nodes
+                }
+            }
+        });
+
+    // Check if the PRIMARY selected node (the one originally clicked) is still visible
+    // If the selected node disappears, clear the selection (like clicking X)
+    // We only check the primary node, not all highlighted nodes, to avoid clearing on unrelated timeline changes
+    // Note: Category selections don't have a primary node, so we don't auto-clear those
+    if (hasActiveSelection && (currentKeywordSelection || currentSelection)) {
+        let primaryNodeStillVisible = false;
+
+        // Find the primary selected node (the one originally clicked)
+        let primarySelectedNode = null;
+        if (currentKeywordSelection) {
+            primarySelectedNode = currentKeywordSelection;
+        } else if (currentSelection) {
+            primarySelectedNode = currentSelection;
+        }
+
+        // Check if the primary selected node is still visible
+        if (primarySelectedNode) {
+            const primaryNodeIdStr = String(primarySelectedNode.id);
+            primaryNodeStillVisible = visibleNodeIds.has(primaryNodeIdStr);
+
+            // Double-check by verifying date range directly if not found in visible set
+            // This prevents false positives from ID mismatch issues
+            if (!primaryNodeStillVisible && timelinePlayer.currentDate) {
+                const nodeFirstDate = parseUKDate(primarySelectedNode.firstDateParsed);
+                const nodeLastDate = parseUKDate(primarySelectedNode.lastDateParsed);
+
+                if (nodeFirstDate && nodeLastDate) {
+                    // Node is actually visible if current date is within its range
+                    if (timelinePlayer.currentDate >= nodeFirstDate && timelinePlayer.currentDate <= nodeLastDate) {
+                        primaryNodeStillVisible = true;
+                        console.log('⚠️ Node is actually visible but not found in visibleNodeIds set - correcting');
+                    }
+                }
+            }
+
+            // Debug log to help diagnose issues (only when not visible)
+            if (!primaryNodeStillVisible && visibleNodeIds.size > 0) {
+                console.log('🔍 Primary node not found in visible set:', {
+                    primaryNodeId: primarySelectedNode.id,
+                    primaryNodeIdStr: primaryNodeIdStr,
+                    visibleNodeIdsSize: visibleNodeIds.size,
+                    sampleVisibleIds: Array.from(visibleNodeIds).slice(0, 5),
+                    currentDate: timelinePlayer.currentDate?.toISOString().split('T')[0],
+                    nodeFirstDate: primarySelectedNode.firstDateParsed,
+                    nodeLastDate: primarySelectedNode.lastDateParsed
+                });
+            }
+        }
+
+        // Only clear if the primary selected node is no longer visible
+        if (primarySelectedNode && !primaryNodeStillVisible) {
+            console.log('🧹 Primary selected node no longer visible - clearing selection');
+
+            // Clear all selections
+            currentSelection = null;
+            currentKeywordSelection = null;
+            currentCategorySelection = null;
+            currentSelectedKeyword = null;
+
+            // Hide all selected tags
+            if (window.hideAllSelectedTags) {
+                window.hideAllSelectedTags();
+            }
+
+            // Remove connection lines and visual indicators
+            if (svg) {
+                svg.selectAll('.connection-line').remove();
+                svg.selectAll('.long-press-indicator, .click-indicator').remove();
+            }
+
+            // Close keyword panel
+            const keywordPanel = document.getElementById('keyword-panel');
+            if (keywordPanel) {
+                keywordPanel.style.display = 'none';
+                keywordPanel.innerHTML = '';
+            }
+
+            // Remove panel-open class
+            const visualizationContainer = document.getElementById('visualization-container');
+            if (visualizationContainer) {
+                visualizationContainer.classList.remove('panel-open');
+            }
+
+            // Update hasActiveSelection after clearing
+            // Will re-evaluate in the loop below
+        }
+    }
+
+    // Re-check hasActiveSelection after potential clearing
+    const hasActiveSelectionNow = currentSelectedKeyword ||
+                                  (currentSelection || currentKeywordSelection) ||
+                                  currentCategorySelection;
+    const highlightedNodeIds = hasActiveSelectionNow ? getHighlightedNodeIds() : new Set();
+
+    // Second pass: update node opacities and styles
     svg.selectAll('.node')
         .each(function (d) {
             const firstDate = parseUKDate(d.firstDateParsed);
             const lastDate = parseUKDate(d.lastDateParsed);
 
             let opacity = 0;
+            let shouldHighlight = false;
 
             if (firstDate && lastDate && timelinePlayer.currentDate) {
                 if (timelinePlayer.currentDate >= firstDate && timelinePlayer.currentDate <= lastDate) {
-                    opacity = 0.8;
-                    visibleNodeIds.add(d.id); // Track visible nodes
+                    // Check if this node should be highlighted
+                    const nodeIdStr = String(d.id);
+                    if (hasActiveSelectionNow && highlightedNodeIds.has(d.id)) {
+                        shouldHighlight = true;
+                        opacity = 1; // Highlighted nodes get full opacity
+                    } else if (hasActiveSelectionNow) {
+                        // If there's an active selection but this node isn't highlighted, dim it
+                        opacity = 0.1;
+                    } else {
+                        // No active selection - normal opacity
+                        opacity = 0.8;
+                    }
                 }
             }
 
-            d3.select(this)
-                .transition()
-                .duration(200)
-                .attr('opacity', opacity)
-                .style('filter', null); // Clear any glow effects
-        });
+            const nodeSelection = d3.select(this);
 
-    // Only manage connection lines and check selections if we have an active selection
-    if (currentSelection || currentKeywordSelection || currentCategorySelection) {
-        // Update connection line opacities based on node visibility
-        svg.selectAll('.connection-line').each(function () {
-            const line = d3.select(this);
-            const node1Id = line.attr('data-node1');
-            const node2Id = line.attr('data-node2');
+            // Update opacity with transition
+            nodeSelection.transition().duration(200).attr('opacity', opacity);
 
-            // Calculate line opacity based on connected nodes' visibility
-            const node1Visible = visibleNodeIds.has(node1Id);
-            const node2Visible = visibleNodeIds.has(node2Id);
-
-            if (node1Visible && node2Visible) {
-                // Both nodes visible - show line at full opacity
-                line.transition().duration(200).style('opacity', 0.6);
-            } else if (node1Visible || node2Visible) {
-                // One node visible - show line at reduced opacity
-                line.transition().duration(200).style('opacity', 0.3);
+            // Apply appropriate styling based on selection state (use hasActiveSelectionNow after potential clearing)
+            if (hasActiveSelectionNow) {
+                if (shouldHighlight && opacity > 0) {
+                    // Highlighted nodes get bright glow
+                    nodeSelection
+                        .style('filter', 'drop-shadow(0 0 12px rgba(255, 255, 255, 0.8))')
+                        .raise();
+                } else if (!shouldHighlight && opacity > 0) {
+                    // Non-highlighted visible nodes get dim glow
+                    nodeSelection
+                        .style('filter', 'drop-shadow(0 0 2px rgba(255, 255, 255, 0.2))');
+                } else {
+                    // Hidden nodes - clear filter
+                    nodeSelection.style('filter', null);
+                }
             } else {
-                // Neither node visible - fade out line
-                line.transition().duration(200).style('opacity', 0);
+                // No active selection - clear any filter effects
+                nodeSelection.style('filter', null);
             }
         });
-    }
 
-    // Note: Selection reset logic removed from updateNodeOpacities
-    // Selections should only be reset by explicit user actions, not during timeline animation
+    // Update connection line visibilities if we have an active selection (after potential clearing)
+    if (hasActiveSelectionNow) {
+        updateConnectionLineVisibilities();
+    }
 }
 
 // Debug function to manually test timeline
